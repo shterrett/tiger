@@ -46,15 +46,15 @@ expMaxPrintArgs m (EseqExp s e) = max (stmMaxPrintArgs m s) (expMaxPrintArgs m e
 
 --------------------------------------------------------------------------------
 
-envStore :: Env -> Id -> Int -> Env
-envStore (store, out) id int = (Map.insertWith (++) id [int] store, out)
+envStore :: Id -> Int -> Env -> Env
+envStore id int (store, out) = (Map.insertWith (++) id [int] store, out)
 
 envLookup :: Env -> Id -> Int
 envLookup (store, _) id = head (store ! id)
 
 printExp :: Env -> Exp -> Env
-printExp (store, out) exp =
-    let ((s1, o1), val) = interpExp (store, out) exp
+printExp env exp =
+    let (val, (s1, o1)) = interpExp exp env
     in (s1, o1 ++ [val])
 
 operate :: Binop -> Int -> Int -> Int
@@ -64,25 +64,23 @@ operate Times = (*)
 operate Div = div
 
 interp :: Stm -> IO ()
-interp stm = let (_, output) = interpStm (Map.empty, []) stm
+interp stm = let (_, output) = interpStm stm (Map.empty, [])
              in (putStrLn . show) output
 
-interpStm :: Env -> Stm -> Env
-interpStm e (CompoundStm s1 s2) = let e2 = interpStm e s1
-                                  in interpStm e2 s2
-interpStm e (AssignStm id exp) =
-    let (e2, val) = interpExp e exp
-    in envStore e2 id val
-interpStm (store, out) (PrintStm exps) =
-    foldl' printExp (store, out) exps
+interpStm ::  Stm -> Env -> Env
+interpStm (CompoundStm s1 s2) e =
+    interpStm s2 $ interpStm s1 e
+interpStm (AssignStm id exp) e =
+    uncurry (envStore id) $ interpExp exp e
+interpStm (PrintStm exps) e =
+    foldl' printExp e exps
 
-interpExp :: Env -> Exp -> (Env, Int)
-interpExp e (IdExp id) = (e, envLookup e id)
-interpExp e (NumExp int) = (e, int)
-interpExp e (OpExp exp1 op exp2) =
-    let (_, val1) = interpExp e exp1
-        (_, val2) = interpExp e exp2
-    in (e, operate op val1 val2)
-interpExp e (EseqExp stm exp) =
-    let e2 = interpStm e stm
-    in interpExp e2 exp
+interpExp :: Exp -> Env -> (Int, Env)
+interpExp (IdExp id) e = (envLookup e id, e)
+interpExp (NumExp int) e = (int, e)
+interpExp (OpExp exp1 op exp2) e =
+    let (val1, _) = interpExp exp1 e
+        (val2, _) = interpExp exp2 e
+    in (operate op val1 val2, e)
+interpExp (EseqExp stm exp) e =
+    interpExp exp $ interpStm stm e

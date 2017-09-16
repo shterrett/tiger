@@ -35,35 +35,35 @@ spec = do
       it "evaluates a simple lookup" $ do
         let env = (Map.singleton "a" [3], [])
             statement = IdExp "a"
-        interpExp env statement `shouldBe` (env, 3)
+        interpExp statement env `shouldBe` (3, env)
       it "evaluates a number literal" $ do
         let env = (Map.empty, [])
             statement = NumExp 5
-        interpExp env statement `shouldBe` (env, 5)
+        interpExp statement env `shouldBe` (5, env)
       it "evaluates an arithmatic operation" $ do
         let env = (Map.empty, [])
             statement = OpExp (NumExp 5) Plus (NumExp 8)
-        interpExp env statement `shouldBe` (env, 13)
+        interpExp statement env `shouldBe` (13, env)
       it "evaluates an expression sequence" $ do
         let env = (Map.empty, [])
             statement = EseqExp (AssignStm "a" (NumExp 5)) (OpExp (NumExp 7) Minus (IdExp "a"))
-        interpExp env statement `shouldBe` ((Map.singleton "a" [5], []), 2)
+        interpExp statement env `shouldBe` (2, (Map.singleton "a" [5], []))
 
     describe "interpStm" $ do
       it "evaluates an assign statement" $ do
         let env = (Map.empty, [])
             statement = AssignStm "a" (NumExp 5)
-        interpStm env statement `shouldBe` (Map.singleton "a" [5], [])
+        interpStm statement env `shouldBe` (Map.singleton "a" [5], [])
       it "evaluates a compound statement, threading the state through" $ do
         let env = (Map.empty, [])
             statement = CompoundStm (AssignStm "a" (NumExp 5))
                                     (AssignStm "b" (NumExp 8))
             expectedStore = Map.fromList [("a", [5]), ("b", [8])]
-        interpStm env statement `shouldBe` (expectedStore, [])
+        interpStm statement env `shouldBe` (expectedStore, [])
       it "evaluates a print statement in order" $ do
         let env = (Map.empty, [])
             statement = PrintStm [NumExp 5, NumExp 6, NumExp 7]
-        interpStm env statement `shouldBe` (Map.empty, [5, 6, 7])
+        interpStm statement env `shouldBe` (Map.empty, [5, 6, 7])
 
     describe "compound statements and expressions" $ do
       it "returns the most recently assigned value on lookup" $ do
@@ -71,7 +71,7 @@ spec = do
             statement = EseqExp (CompoundStm (AssignStm "a" (NumExp 5))
                                              (AssignStm "a" (NumExp 9)))
                                 (IdExp "a")
-        let (_, val) = interpExp env statement
+        let (val, _) = interpExp statement env
         val `shouldBe` 9
       it "threads the updated environments through a print statement" $ do
         let env = (Map.empty, [])
@@ -84,7 +84,7 @@ spec = do
               , EseqExp (AssignStm "a" (OpExp (IdExp "a") Minus (NumExp 2)))
                         (IdExp "a")
               ]
-        let (_, output) = interpStm env statement
+        let (_, output) = interpStm statement env
         output `shouldBe` [5, 11, 9]
       it "prints nested print statement output in order" $ do
         let env = (Map.empty, [])
@@ -98,5 +98,5 @@ spec = do
               , EseqExp (AssignStm "a" (OpExp (IdExp "a") Minus (NumExp 2)))
                         (IdExp "a")
               ]
-        let (_, output) = interpStm env statement
+        let (_, output) = interpStm statement env
         output `shouldBe` [5, 1000, 11, 9]
