@@ -17,6 +17,8 @@ library
   hs-source-dirs:      src
   exposed-modules:     Lib
                      , Straightline
+                     , TigerTypes
+                     , Parse
   build-depends:       base >= 4.7 && < 5
                      , containers >= 0.5.0
   default-language:    Haskell2010
@@ -33,7 +35,7 @@ test-suite tiger-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  exposed-modules:     StraightlineSpec
+  other-modules:     StraightlineSpec
   build-depends:       base
                      , tiger
                      , hspec
