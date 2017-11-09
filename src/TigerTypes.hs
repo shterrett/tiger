@@ -22,6 +22,7 @@ data LValue =
 data Expression =
     LValExp LValue
     | Comment String
+    | DecExp Declaration
     | ValuelessExpression Expression
     | Nil
     | Sequence [Expression]
