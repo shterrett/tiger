@@ -29,3 +29,16 @@ spec = do
   describe "parsing comments" $ do
     it "parses comments between /* and */" $ do
       testParse commentParser "/* this is a comment */" `shouldBe` Right (Comment " this is a comment ")
+  describe "parsing declarations" $ do
+    describe "parsing type declarations" $ do
+      it "parses type fields" $ do
+        Parsec.parse typeFieldParser ""  "{field_1: value_1, field_2: value_2}" `shouldBe`
+          Right [("field_1", "value_1"), ("field_2", "value_2")]
+      it "is not space sensitive" $ do
+        Parsec.parse typeFieldParser ""  "{ field_1: value_1, field_2: value_2 }" `shouldBe`
+          Right [("field_1", "value_1"), ("field_2", "value_2")]
+        Parsec.parse typeFieldParser ""  "{field_1:value_1,field_2:value_2}" `shouldBe`
+          Right [("field_1", "value_1"), ("field_2", "value_2")]
+      it "requires a field and value" $ do
+        isLeft (Parsec.parse typeFieldParser ""  "{ field_1: , field_2: value_2 }") `shouldBe` True
+        isLeft (Parsec.parse typeFieldParser ""  "{ value_1 , field_2: value_2 }") `shouldBe` True
