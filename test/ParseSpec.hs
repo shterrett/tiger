@@ -2,8 +2,12 @@ module ParseSpec where
 
 import Data.Either (isLeft)
 import Test.Hspec
-import Parse (parse)
+import qualified Text.Parsec as Parsec (parse, ParseError, Parsec)
+import Parse
 import TigerTypes
+
+testParse :: (Parsec.Parsec String () Expression) -> String -> Either Parsec.ParseError Expression
+testParse parser = Parsec.parse parser ""
 
 spec :: Spec
 spec = do
@@ -13,12 +17,15 @@ spec = do
   describe "parsing identifiers" $ do
     let parsedId = Right . LValExp . Id
     it "accepts a string composed of letters, numbers, and underscores" $ do
-      parse "valid_id" `shouldBe` parsedId "valid_id"
-      parse "validId" `shouldBe` parsedId "validId"
-      parse "id_123" `shouldBe` parsedId "id_123"
-      parse "id123" `shouldBe` parsedId "id123"
+      testParse idParser "valid_id" `shouldBe` parsedId "valid_id"
+      testParse idParser "validId" `shouldBe` parsedId "validId"
+      testParse idParser "id_123" `shouldBe` parsedId "id_123"
+      testParse idParser "id123" `shouldBe` parsedId "id123"
     it "rejects a string that starts with a number" $ do
-      isLeft (parse "1id") `shouldBe` True
-      isLeft (parse "1_id") `shouldBe` True
+      isLeft (testParse idParser "1id") `shouldBe` True
+      isLeft (testParse idParser "1_id") `shouldBe` True
     it "rejects a string that starts with an underscore" $ do
-      isLeft (parse "_id") `shouldBe` True
+      isLeft (testParse idParser "_id") `shouldBe` True
+  describe "parsing comments" $ do
+    it "parses comments between /* and */" $ do
+      testParse commentParser "/* this is a comment */" `shouldBe` Right (Comment " this is a comment ")

@@ -16,3 +16,7 @@ expressionParser = idParser
 idParser :: Parsec String () Expression
 idParser = fmap (LValExp . Id) $
   fmap concat (sequence [count 1 letter, many (alphaNum <|> (char '_'))])
+
+commentParser :: Parsec String () Expression
+commentParser = fmap Comment $
+  string "/*" >> manyTill anyChar (try $ string "*/")

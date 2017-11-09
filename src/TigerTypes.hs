@@ -2,8 +2,6 @@ module TigerTypes where
 
 type Atom = String
 type TypeName = String
-data Comment = Comment String
-  deriving (Show, Eq)
 type DeclarationList = [Declaration]
 data Declaration =
     TypeDec TypeName Type
@@ -23,6 +21,7 @@ data LValue =
     deriving (Show, Eq)
 data Expression =
     LValExp LValue
+    | Comment String
     | ValuelessExpression Expression
     | Nil
     | Sequence [Expression]
