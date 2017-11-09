@@ -1,21 +1,26 @@
 module TigerTypes where
 
-data Atom = Atom String
+type Atom = String
+type TypeName = String
 data Comment = Comment String
+  deriving (Show, Eq)
 type DeclarationList = [Declaration]
 data Declaration =
-    TypeDec Atom Type
-    | VarDec Atom (Maybe Atom) Expression
-    | FnDec Atom TypeFields (Maybe Atom) Expression
-type TypeFields = [(Atom, Atom)]
+    TypeDec TypeName Type
+    | VarDec Atom (Maybe TypeName) Expression
+    | FnDec Atom TypeFields (Maybe TypeName) Expression
+    deriving (Show, Eq)
+type TypeFields = [(Atom, TypeName)]
 data Type =
-    TypeId Atom
+    TypeId TypeName
     | RecordOf TypeFields
-    | ArrayOf Atom
+    | ArrayOf TypeName
+    deriving (Show, Eq)
 data LValue =
     Id Atom
     | RecordAccess LValue Atom
     | ArraySubscript LValue Expression
+    deriving (Show, Eq)
 data Expression =
     LValExp LValue
     | ValuelessExpression Expression
@@ -37,6 +42,7 @@ data Expression =
     | Break
     | Let DeclarationList [Expression]
     | Grouped [Expression]
+    deriving (Show, Eq)
 data Operator =
     Addition
     | Subtraction
@@ -50,3 +56,4 @@ data Operator =
     | GreaterThanOrEqual
     | And
     | Or
+    deriving (Show, Eq)
