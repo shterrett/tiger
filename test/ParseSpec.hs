@@ -6,26 +6,11 @@ import qualified Text.Parsec as Parsec (parse, ParseError, Parsec)
 import Parse
 import TigerTypes
 
-testParse :: (Parsec.Parsec String () Expression) -> String -> Either Parsec.ParseError Expression
-testParse parser = Parsec.parse parser ""
-
 spec :: Spec
 spec = do
   describe "formatting error messages" $ do
     it "shows the line, column and error on a failed parse" $ do
       parse "1id" `shouldBe` Left "(line 1, column 1):\nunexpected \"1\"\nexpecting \"/*\", \"type\", \"var\", \"function\" or letter"
-  describe "parsing identifiers" $ do
-    let parsedId = Right . LValExp . Id
-    it "accepts a string composed of letters, numbers, and underscores" $ do
-      testParse idParser "valid_id" `shouldBe` parsedId "valid_id"
-      testParse idParser "validId" `shouldBe` parsedId "validId"
-      testParse idParser "id_123" `shouldBe` parsedId "id_123"
-      testParse idParser "id123" `shouldBe` parsedId "id123"
-    it "rejects a string that starts with a number" $ do
-      isLeft (testParse idParser "1id") `shouldBe` True
-      isLeft (testParse idParser "1_id") `shouldBe` True
-    it "rejects a string that starts with an underscore" $ do
-      isLeft (testParse idParser "_id") `shouldBe` True
   describe "parsing comments" $ do
     it "parses comments between /* and */" $ do
       Parsec.parse commentParser "" "/* this is a comment */" `shouldBe` Right " this is a comment "
@@ -67,3 +52,25 @@ spec = do
       it "parses function declaration without return type" $ do
         Parsec.parse declarationParser "" "function test (x: string) = x"
           `shouldBe` Right (FnDec "test" [("x", "string")] Nothing (LValExp $ Id "x"))
+  describe "parsing LValues" $ do
+    describe "parsing identifiers" $ do
+      it "accepts a string composed of letters, numbers, and underscores" $ do
+        Parsec.parse lvalueParser "" "valid_id" `shouldBe` Right (Id "valid_id")
+        Parsec.parse lvalueParser "" "validId" `shouldBe` Right (Id "validId")
+        Parsec.parse lvalueParser "" "id_123" `shouldBe` Right (Id "id_123")
+        Parsec.parse lvalueParser "" "id123" `shouldBe` Right (Id "id123")
+      it "rejects a string that starts with a number" $ do
+        isLeft (Parsec.parse lvalueParser "" "1id") `shouldBe` True
+        isLeft (Parsec.parse lvalueParser "" "1_id") `shouldBe` True
+      it "rejects a string that starts with an underscore" $ do
+        isLeft (Parsec.parse lvalueParser "" "_id") `shouldBe` True
+    describe "parsing record accesses" $ do
+      it "uses the dot to separate the record and the field" $ do
+        Parsec.parse lvalueParser "" "record.field" `shouldBe` Right (RecordAccess (Id "record") "field")
+      it "does not allow spaces around the dot" $ do
+        isLeft (Parsec.parse lvalueParser "" "record. field") `shouldBe` True
+        Parsec.parse lvalueParser "" "record .field"`shouldBe` Right (Id "record")
+        Parsec.parse lvalueParser "" "record . field" `shouldBe` Right (Id "record")
+      it "allows chained record access" $ do
+        Parsec.parse lvalueParser "" "record.field_1.field_2"
+          `shouldBe` Right (RecordAccess (RecordAccess (Id "record") "field_1") "field_2")

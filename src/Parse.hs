@@ -14,10 +14,7 @@ expressionParser :: Parsec String () Expression
 expressionParser =
     try (Comment <$> commentParser)
     <|> try (DecExp <$> declarationParser)
-    <|> idParser
-
-idParser :: Parsec String () Expression
-idParser = fmap (LValExp . Id) $ atomParser
+    <|> LValExp <$> lvalueParser
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -38,6 +35,24 @@ declarationParser = try typeDeclarationParser
                                     <*> (spaces >> typeFieldParser lparen rparen)
                                     <*> (optionMaybe $ try (spaces >> char ':' >> spaces >> typeNameParser))
                                     <*> (spaces >> char '=' >> spaces >> expressionParser)
+
+lvalueParser :: Parsec String () LValue
+lvalueParser = leftRec idParser (recordAccessModifier <|> arraySubscriptModifier)
+  where
+    idParser = Id <$> atomParser
+    recordAccessModifier = do
+      a <- char '.' >> atomParser
+      return (\l -> RecordAccess l a)
+    arraySubscriptModifier = do
+      e <- between (char '[') (char ']') expressionParser
+      return (\l -> ArraySubscript l e)
+
+leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
+leftRec p op = rest =<< p
+  where
+    rest x = do f <- op
+                rest (f x)
+          <|> return x
 
 typeParser :: Parsec String () Type
 typeParser = try (fmap RecordOf $ typeFieldParser lbrace rbrace)
