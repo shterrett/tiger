@@ -31,14 +31,40 @@ spec = do
       testParse commentParser "/* this is a comment */" `shouldBe` Right (Comment " this is a comment ")
   describe "parsing declarations" $ do
     describe "parsing type declarations" $ do
+      let fieldParser = typeFieldParser lbrace rbrace
       it "parses type fields" $ do
-        Parsec.parse typeFieldParser ""  "{field_1: value_1, field_2: value_2}" `shouldBe`
+        Parsec.parse fieldParser ""  "{field_1: value_1, field_2: value_2}" `shouldBe`
           Right [("field_1", "value_1"), ("field_2", "value_2")]
       it "is not space sensitive" $ do
-        Parsec.parse typeFieldParser ""  "{ field_1: value_1, field_2: value_2 }" `shouldBe`
+        Parsec.parse fieldParser ""  "{ field_1: value_1, field_2: value_2 }" `shouldBe`
           Right [("field_1", "value_1"), ("field_2", "value_2")]
-        Parsec.parse typeFieldParser ""  "{field_1:value_1,field_2:value_2}" `shouldBe`
+        Parsec.parse fieldParser ""  "{field_1:value_1,field_2:value_2}" `shouldBe`
           Right [("field_1", "value_1"), ("field_2", "value_2")]
       it "requires a field and value" $ do
-        isLeft (Parsec.parse typeFieldParser ""  "{ field_1: , field_2: value_2 }") `shouldBe` True
-        isLeft (Parsec.parse typeFieldParser ""  "{ value_1 , field_2: value_2 }") `shouldBe` True
+        isLeft (Parsec.parse fieldParser ""  "{ field_1: , field_2: value_2 }") `shouldBe` True
+        isLeft (Parsec.parse fieldParser ""  "{ value_1 , field_2: value_2 }") `shouldBe` True
+      it "parses empty type fields" $ do
+        Parsec.parse fieldParser "" "{}" `shouldBe` Right []
+      it "parses type fields into a type" $ do
+        Parsec.parse typeParser "" "{ field_1: value_1 }" `shouldBe` Right (RecordOf [("field_1", "value_1")])
+      it "parses a type name into a type" $ do
+        Parsec.parse typeParser "" "string" `shouldBe` Right (TypeId "string")
+      it "parses an array type" $ do
+        Parsec.parse typeParser "" "array of int" `shouldBe` Right (ArrayOf "int")
+      it "parses a type declaration" $ do
+        Parsec.parse declarationParser "" "type email = string"
+          `shouldBe` Right (TypeDec "email" (TypeId "string"))
+    describe "parsing variable declarations" $ do
+      it "parses assignment with a type id" $ do
+        Parsec.parse declarationParser "" "var x: string := y"
+          `shouldBe` Right (VarDec "x" (Just "string") (LValExp $ Id "y"))
+      it "parses assignment without a type id" $ do
+        Parsec.parse declarationParser "" "var x := y" `shouldBe` Right (VarDec "x" Nothing (LValExp $ Id "y"))
+    describe "parsing function declaration" $ do
+      it "parses function declaration with return type" $ do
+        Parsec.parse declarationParser "" "function test (x: string) : string = x"
+          `shouldBe` Right (FnDec "test" [("x", "string")] (Just "string") (LValExp $ Id "x"))
+      it "parses function declaration without return type" $ do
+        Parsec.parse declarationParser "" "function test (x: string) = x"
+          `shouldBe` Right (FnDec "test" [("x", "string")] Nothing (LValExp $ Id "x"))
+

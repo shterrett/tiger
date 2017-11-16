@@ -20,8 +20,30 @@ commentParser :: Parsec String () Expression
 commentParser = fmap Comment $
   string "/*" >> manyTill anyChar (try $ string "*/")
 
-typeFieldParser :: Parsec String () TypeFields
-typeFieldParser = between lbrace rbrace (sepBy fieldPairParser comma)
+declarationParser :: Parsec String () Declaration
+declarationParser = try typeDeclarationParser
+  <|> try variableDeclarationParser
+  <|> functionDeclarationParser
+  where typeDeclarationParser = TypeDec
+                                <$> (string "type" >> spaces >> typeNameParser)
+                                <*> (spaces >> char '=' >> spaces >> typeParser)
+        variableDeclarationParser = VarDec
+                                    <$> (string "var" >> spaces >> atomParser)
+                                    <*> (optionMaybe $ try (spaces >> char ':' >> spaces >> typeNameParser))
+                                    <*> (spaces >> string ":=" >> spaces >> expressionParser)
+        functionDeclarationParser = FnDec
+                                    <$> (string "function" >> spaces >> atomParser)
+                                    <*> (spaces >> typeFieldParser lparen rparen)
+                                    <*> (optionMaybe $ try (spaces >> char ':' >> spaces >> typeNameParser))
+                                    <*> (spaces >> char '=' >> spaces >> expressionParser)
+
+typeParser :: Parsec String () Type
+typeParser = try (fmap RecordOf $ typeFieldParser lbrace rbrace)
+             <|> try (fmap ArrayOf (string "array of " >> typeNameParser))
+             <|> fmap  TypeId typeNameParser
+
+typeFieldParser :: Parsec String () String -> Parsec String () String -> Parsec String () TypeFields
+typeFieldParser lsep rsep = between lsep rsep (sepBy fieldPairParser comma)
   where fieldPairParser = pairAtoms <$> sequence [atomParser, colon, typeNameParser]
         pairAtoms (field:_:typeId:[]) = (field, typeId)
 
@@ -35,3 +57,5 @@ colon = try (string ": ") <|> string ":"
 comma = try (string ", ") <|> string ","
 lbrace = try (string "{ ") <|> string "{"
 rbrace = try (string " }") <|> string "}"
+lparen = try (string "( ") <|> string "("
+rparen = try (string ") ") <|> string ")"
