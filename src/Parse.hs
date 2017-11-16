@@ -11,14 +11,16 @@ parse s = case Parsec.parse expressionParser "" s of
           Left e -> Left $ show e
 
 expressionParser :: Parsec String () Expression
-expressionParser = idParser
+expressionParser =
+    try (Comment <$> commentParser)
+    <|> try (DecExp <$> declarationParser)
+    <|> idParser
 
 idParser :: Parsec String () Expression
 idParser = fmap (LValExp . Id) $ atomParser
 
-commentParser :: Parsec String () Expression
-commentParser = fmap Comment $
-  string "/*" >> manyTill anyChar (try $ string "*/")
+commentParser :: Parsec String () String
+commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
 
 declarationParser :: Parsec String () Declaration
 declarationParser = try typeDeclarationParser

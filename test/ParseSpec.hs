@@ -13,7 +13,7 @@ spec :: Spec
 spec = do
   describe "formatting error messages" $ do
     it "shows the line, column and error on a failed parse" $ do
-      parse "1id" `shouldBe` Left "(line 1, column 1):\nunexpected \"1\"\nexpecting letter"
+      parse "1id" `shouldBe` Left "(line 1, column 1):\nunexpected \"1\"\nexpecting \"/*\", \"type\", \"var\", \"function\" or letter"
   describe "parsing identifiers" $ do
     let parsedId = Right . LValExp . Id
     it "accepts a string composed of letters, numbers, and underscores" $ do
@@ -28,7 +28,7 @@ spec = do
       isLeft (testParse idParser "_id") `shouldBe` True
   describe "parsing comments" $ do
     it "parses comments between /* and */" $ do
-      testParse commentParser "/* this is a comment */" `shouldBe` Right (Comment " this is a comment ")
+      Parsec.parse commentParser "" "/* this is a comment */" `shouldBe` Right " this is a comment "
   describe "parsing declarations" $ do
     describe "parsing type declarations" $ do
       let fieldParser = typeFieldParser lbrace rbrace
@@ -67,4 +67,3 @@ spec = do
       it "parses function declaration without return type" $ do
         Parsec.parse declarationParser "" "function test (x: string) = x"
           `shouldBe` Right (FnDec "test" [("x", "string")] Nothing (LValExp $ Id "x"))
-
