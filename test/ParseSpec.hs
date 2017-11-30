@@ -10,7 +10,7 @@ spec :: Spec
 spec = do
   describe "formatting error messages" $ do
     it "shows the line, column and error on a failed parse" $ do
-      let errorPrefix = "(line 1, column 1):\nunexpected \"1\"\nexpecting"
+      let errorPrefix = "(line 1, column 3):\nunexpected 'i'"
       (take (length errorPrefix)) <$> (lefts [parse "1id"]) `shouldBe` [errorPrefix]
   describe "parsing comments" $ do
     it "parses comments between /* and */" $ do
@@ -113,3 +113,9 @@ spec = do
     it "allows empty parentheses" $ do
       Parsec.parse sequenceParser "" "()" `shouldBe` Right []
       Parsec.parse sequenceParser "" "( )" `shouldBe` Right []
+  describe "parsing integers" $ do
+    it "parses a sequence of integers as a single integer literal" $ do
+      Parsec.parse intParser "" "1234" `shouldBe` Right 1234
+    it "fails if followed immediately by an alphanum character or underscore" $ do
+      isLeft (Parsec.parse intParser "" "1234a") `shouldBe` True
+      isLeft (Parsec.parse intParser "" "1234_") `shouldBe` True

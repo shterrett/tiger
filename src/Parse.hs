@@ -17,6 +17,7 @@ expressionParser =
     <|> try (LValExp <$> lvalueParser)
     <|> try (const Nil <$> nilParser)
     <|> try (Sequence <$> sequenceParser)
+    <|> try (IntLiteral <$> intParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -54,6 +55,9 @@ nilParser = const () <$> (string "nil" >> notFollowedBy (alphaNum <|> (char '_')
 
 sequenceParser :: Parsec String () [Expression]
 sequenceParser = between lparen rparen $ sepBy expressionParser semicolon
+
+intParser :: Parsec String () Integer
+intParser = read <$> ((many1 digit) <* notFollowedBy (alphaNum <|> (char '_')))
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p
