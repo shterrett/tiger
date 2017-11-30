@@ -1,6 +1,6 @@
 module ParseSpec where
 
-import Data.Either (isLeft)
+import Data.Either (isLeft, lefts)
 import Test.Hspec
 import qualified Text.Parsec as Parsec (parse, ParseError, Parsec)
 import Parse
@@ -10,7 +10,8 @@ spec :: Spec
 spec = do
   describe "formatting error messages" $ do
     it "shows the line, column and error on a failed parse" $ do
-      parse "1id" `shouldBe` Left "(line 1, column 1):\nunexpected \"1\"\nexpecting \"/*\", \"type\", \"var\", \"function\", letter or \"nil\""
+      let errorPrefix = "(line 1, column 1):\nunexpected \"1\"\nexpecting"
+      (take (length errorPrefix)) <$> (lefts [parse "1id"]) `shouldBe` [errorPrefix]
   describe "parsing comments" $ do
     it "parses comments between /* and */" $ do
       Parsec.parse commentParser "" "/* this is a comment */" `shouldBe` Right " this is a comment "
