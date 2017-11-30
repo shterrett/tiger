@@ -100,3 +100,15 @@ spec = do
     it "fails when nil is the beginning of a longer token" $ do
       isLeft (Parsec.parse nilParser "" "nilish") `shouldBe` True
       isLeft (Parsec.parse nilParser "" "nil_ish") `shouldBe` True
+  describe "parsing sequence of expressions" $ do
+    it "returns a list of parsed expressions" $ do
+      Parsec.parse sequenceParser "" "(var x := y; var z := x)"
+        `shouldBe` Right ([(DecExp $ VarDec "x" Nothing (LValExp $ Id "y")),
+                           (DecExp $ VarDec "z" Nothing (LValExp $ Id "x"))])
+    it "allows spaces within the list" $ do
+      Parsec.parse sequenceParser "" "( var x := y ; var z := x )"
+        `shouldBe` Right ([(DecExp $ VarDec "x" Nothing (LValExp $ Id "y")),
+                           (DecExp $ VarDec "z" Nothing (LValExp $ Id "x"))])
+    it "allows empty parentheses" $ do
+      Parsec.parse sequenceParser "" "()" `shouldBe` Right []
+      Parsec.parse sequenceParser "" "( )" `shouldBe` Right []

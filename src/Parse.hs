@@ -14,8 +14,9 @@ expressionParser :: Parsec String () Expression
 expressionParser =
     try (Comment <$> commentParser)
     <|> try (DecExp <$> declarationParser)
-    <|> LValExp <$> lvalueParser
-    <|> const Nil <$> nilParser
+    <|> try (LValExp <$> lvalueParser)
+    <|> try (const Nil <$> nilParser)
+    <|> try (Sequence <$> sequenceParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -51,6 +52,9 @@ lvalueParser = leftRec idParser (recordAccessModifier <|> arraySubscriptModifier
 nilParser :: Parsec String () ()
 nilParser = const () <$> (string "nil" >> notFollowedBy (alphaNum <|> (char '_')))
 
+sequenceParser :: Parsec String () [Expression]
+sequenceParser = between lparen rparen $ sepBy expressionParser semicolon
+
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p
   where
@@ -75,6 +79,7 @@ typeNameParser :: Parsec String () TypeName
 typeNameParser = atomParser
 
 colon = try $ charToString (char ':' <* spaces)
+semicolon = try $ charToString (spaces >> char ';' <* spaces)
 comma = try $ charToString (char ',' <* spaces)
 lbrace = try $ charToString (char '{' <* spaces)
 rbrace = try $ charToString (spaces >> char '}')
