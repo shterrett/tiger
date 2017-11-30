@@ -44,7 +44,7 @@ lvalueParser = leftRec idParser (recordAccessModifier <|> arraySubscriptModifier
       a <- char '.' >> atomParser
       return (\l -> RecordAccess l a)
     arraySubscriptModifier = do
-      e <- between (char '[') (char ']') expressionParser
+      e <- between (char '[' >> spaces) (spaces >> char ']') expressionParser
       return (\l -> ArraySubscript l e)
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
