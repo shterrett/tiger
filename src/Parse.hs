@@ -18,6 +18,7 @@ expressionParser =
     <|> try (const Nil <$> nilParser)
     <|> try (Sequence <$> sequenceParser)
     <|> try (IntLiteral <$> intParser)
+    <|> try (StringLiteral <$> stringParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -58,6 +59,13 @@ sequenceParser = between lparen rparen $ sepBy expressionParser semicolon
 
 intParser :: Parsec String () Integer
 intParser = read <$> ((many1 digit) <* notFollowedBy (alphaNum <|> (char '_')))
+
+stringParser :: Parsec String () String
+stringParser =
+    let escapedQuote = try $ fmap (const '"') (string "\\\"")
+        notQuote = noneOf ['"']
+        withinQuotes = between (char '"') (char '"')
+    in withinQuotes (many $ escapedQuote <|> notQuote)
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p

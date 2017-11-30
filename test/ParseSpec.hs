@@ -119,3 +119,16 @@ spec = do
     it "fails if followed immediately by an alphanum character or underscore" $ do
       isLeft (Parsec.parse intParser "" "1234a") `shouldBe` True
       isLeft (Parsec.parse intParser "" "1234_") `shouldBe` True
+  describe "parsing strings" $ do
+    it "parses a string literal" $ do
+      Parsec.parse stringParser "" "\"hello, world\"" `shouldBe` Right "hello, world"
+    it "handles escape sequences" $ do
+      Parsec.parse stringParser "" "\"hello\nworld\"" `shouldBe` Right "hello\nworld"
+      Parsec.parse stringParser "" "\"hello\tworld\"" `shouldBe` Right "hello\tworld"
+      Parsec.parse stringParser "" "\"hello\^Iworld\"" `shouldBe` Right "hello\tworld"
+      Parsec.parse stringParser "" "\"hello\\world\"" `shouldBe` Right "hello\\world"
+      Parsec.parse stringParser "" "\"hello \\\"world\\\"\"" `shouldBe` Right "hello \"world\""
+      Parsec.parse stringParser "" "\"hello\59world\"" `shouldBe` Right "hello;world"
+      Parsec.parse stringParser "" "\"hello\
+      \ world\"" `shouldBe` Right "hello world"
+
