@@ -44,7 +44,7 @@ lvalueParser = leftRec idParser (recordAccessModifier <|> arraySubscriptModifier
       a <- char '.' >> atomParser
       return (\l -> RecordAccess l a)
     arraySubscriptModifier = do
-      e <- between (char '[' >> spaces) (spaces >> char ']') expressionParser
+      e <- between lsquare rsquare expressionParser
       return (\l -> ArraySubscript l e)
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
@@ -70,9 +70,14 @@ atomParser = fmap concat (sequence [count 1 letter, many (alphaNum <|> (char '_'
 typeNameParser :: Parsec String () TypeName
 typeNameParser = atomParser
 
-colon = try (string ": ") <|> string ":"
-comma = try (string ", ") <|> string ","
-lbrace = try (string "{ ") <|> string "{"
-rbrace = try (string " }") <|> string "}"
-lparen = try (string "( ") <|> string "("
-rparen = try (string ") ") <|> string ")"
+colon = try $ charToString (char ':' <* spaces)
+comma = try $ charToString (char ',' <* spaces)
+lbrace = try $ charToString (char '{' <* spaces)
+rbrace = try $ charToString (spaces >> char '}')
+lparen = try $ charToString (char '(' <* spaces)
+rparen = try $ charToString (spaces >> char ')')
+lsquare = try $ charToString (char '[' <* spaces)
+rsquare = try $ charToString (spaces >> char ']')
+
+charToString :: Parsec String () Char -> Parsec String () String
+charToString = fmap (\c -> [c])
