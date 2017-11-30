@@ -101,6 +101,10 @@ spec = do
     it "fails when nil is the beginning of a longer token" $ do
       isLeft (Parsec.parse nilParser "" "nilish") `shouldBe` True
       isLeft (Parsec.parse nilParser "" "nil_ish") `shouldBe` True
+  describe "parsing no value" $ do
+    it "parses empty parentheses" $ do
+      Parsec.parse noValueParser "" "()" `shouldBe` Right ()
+      Parsec.parse noValueParser "" "( )" `shouldBe` Right ()
   describe "parsing sequence of expressions" $ do
     it "returns a list of parsed expressions" $ do
       Parsec.parse sequenceParser "" "(var x := y; var z := x)"
@@ -110,9 +114,6 @@ spec = do
       Parsec.parse sequenceParser "" "( var x := y ; var z := x )"
         `shouldBe` Right ([(DecExp $ VarDec "x" Nothing (LValExp $ Id "y")),
                            (DecExp $ VarDec "z" Nothing (LValExp $ Id "x"))])
-    it "allows empty parentheses" $ do
-      Parsec.parse sequenceParser "" "()" `shouldBe` Right []
-      Parsec.parse sequenceParser "" "( )" `shouldBe` Right []
   describe "parsing integers" $ do
     it "parses a sequence of integers as a single integer literal" $ do
       Parsec.parse intParser "" "1234" `shouldBe` Right 1234
@@ -145,3 +146,12 @@ spec = do
     it "calls a function without arguments" $ do
       Parsec.parse funcParser "" "fireTheMissles()"
         `shouldBe` Right ("fireTheMissles", [])
+  describe "Binary Operations" $ do
+    describe "arithmetic" $ do
+      it "parses basic arithmetic" $ do
+        Parsec.parse binopParser "" "3 + 5" `shouldBe` Right (BinOp Addition (IntLiteral 3) (IntLiteral 5))
+        Parsec.parse binopParser "" "3 * 5" `shouldBe` Right (BinOp Multiplication (IntLiteral 3) (IntLiteral 5))
+        Parsec.parse binopParser "" "3 - 5" `shouldBe` Right (BinOp Subtraction (IntLiteral 3) (IntLiteral 5))
+        Parsec.parse binopParser "" "3 / 5" `shouldBe` Right (BinOp Division (IntLiteral 3) (IntLiteral 5))
+      it "requires space after the subtraction operator" $ do
+        Parsec.parse binopParser "" "3-5" `shouldBe` Right (IntLiteral 3)

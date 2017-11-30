@@ -26,12 +26,12 @@ data Expression =
     | ValuelessExpression Expression
     | Nil
     | Sequence [Expression]
-    | NoValue Expression
+    | NoValue
     | IntLiteral Integer
     | StringLiteral String
     | Negation Expression
     | FunctionCall Atom [Expression]
-    | BinOp Expression Operator Expression
+    | BinOp Operator Expression Expression
     | Record
     | Array
     | Assignment LValue Expression

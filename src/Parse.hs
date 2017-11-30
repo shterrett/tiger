@@ -14,13 +14,15 @@ expressionParser :: Parsec String () Expression
 expressionParser =
     try (Comment <$> commentParser)
     <|> try (DecExp <$> declarationParser)
-    <|> try (LValExp <$> lvalueParser)
+    <|> LValExp <$> lvalueParser
     <|> try (const Nil <$> nilParser)
-    <|> try (Sequence <$> sequenceParser)
-    <|> try (IntLiteral <$> intParser)
+    <|> try (const NoValue <$> noValueParser)
+    <|> Sequence <$> sequenceParser
+    <|> IntLiteral <$> intParser
     <|> try (StringLiteral <$> stringParser)
     <|> try (Negation <$> negationParser)
     <|> try (uncurry FunctionCall <$> funcParser)
+    <|> try binopParser
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -50,11 +52,17 @@ lvalueParser = leftRec idParser (recordAccessModifier <|> arraySubscriptModifier
       a <- char '.' >> atomParser
       return (\l -> RecordAccess l a)
     arraySubscriptModifier = do
-      e <- between lsquare rsquare expressionParser
+      e <- expInBrackets
       return (\l -> ArraySubscript l e)
+    expInBrackets =
+      (try (lsquare >> spaces >> rsquare) >> fail "square brackets cannot be empty")
+      <|> between lsquare rsquare expressionParser
 
 nilParser :: Parsec String () ()
 nilParser = const () <$> (string "nil" >> notFollowedBy (alphaNum <|> (char '_')))
+
+noValueParser :: Parsec String () ()
+noValueParser = const () <$> between lparen rparen spaces
 
 sequenceParser :: Parsec String () [Expression]
 sequenceParser = between lparen rparen $ sepBy expressionParser semicolon
@@ -70,12 +78,19 @@ stringParser =
     in withinQuotes (many $ escapedQuote <|> notQuote)
 
 negationParser :: Parsec String () Expression
-negationParser = char '-' >> expressionParser
+negationParser = (try (string "- " <* spaces) >> fail "Cannot have space after negation")
+                 <|> (char '-' >> expressionParser)
 
 funcParser :: Parsec String () (Atom, [Expression])
 funcParser =
-    let argList = between lparen rparen (sepBy expressionParser comma)
-    in(,) <$> atomParser <*> argList
+    let argList = const [] <$> try (lparen >> space >> spaces >> rparen)
+                  <|> const [] <$> try (lparen >> rparen)
+                  <|> try (between lparen rparen (sepBy expressionParser comma))
+    in (,) <$> atomParser <*> argList
+
+binopParser :: Parsec String () Expression
+binopParser = chainl1 expressionParser operator
+  where operator = BinOp <$> operatorParser
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p
@@ -112,3 +127,15 @@ rsquare = try $ charToString (spaces >> char ']')
 
 charToString :: Parsec String () Char -> Parsec String () String
 charToString = fmap (\c -> [c])
+
+plus = const Addition <$> (spaces >> (char '+') <* spaces)
+minus = const Subtraction <$> (spaces >> (string "- ") <* spaces)
+multby = const Multiplication <$> (spaces >> (char '*') <* spaces)
+divby = const Division <$> (spaces >> (char '/') <* spaces)
+
+operatorParser :: Parsec String () Operator
+operatorParser =
+    try plus
+    <|> try minus
+    <|> try multby
+    <|> try divby
