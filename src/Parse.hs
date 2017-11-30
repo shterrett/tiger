@@ -19,6 +19,7 @@ expressionParser =
     <|> try (Sequence <$> sequenceParser)
     <|> try (IntLiteral <$> intParser)
     <|> try (StringLiteral <$> stringParser)
+    <|> try (Negation <$> negationParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -66,6 +67,9 @@ stringParser =
         notQuote = noneOf ['"']
         withinQuotes = between (char '"') (char '"')
     in withinQuotes (many $ escapedQuote <|> notQuote)
+
+negationParser :: Parsec String () Expression
+negationParser = char '-' >> expressionParser
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p

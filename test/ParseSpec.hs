@@ -131,4 +131,10 @@ spec = do
       Parsec.parse stringParser "" "\"hello\59world\"" `shouldBe` Right "hello;world"
       Parsec.parse stringParser "" "\"hello\
       \ world\"" `shouldBe` Right "hello world"
-
+  describe "negating an expression" $ do
+    it "negates integer literals" $ do
+      Parsec.parse negationParser "" "-1234" `shouldBe` Right (IntLiteral 1234)
+    it "negates other expressions" $ do
+      Parsec.parse negationParser "" "-a" `shouldBe` Right (LValExp $ Id "a")
+    it "does not allow space after the hyphen" $ do
+      isLeft (Parsec.parse negationParser "" "- a") `shouldBe` True
