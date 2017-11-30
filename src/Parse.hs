@@ -15,6 +15,7 @@ expressionParser =
     try (Comment <$> commentParser)
     <|> try (DecExp <$> declarationParser)
     <|> LValExp <$> lvalueParser
+    <|> const Nil <$> nilParser
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -46,6 +47,9 @@ lvalueParser = leftRec idParser (recordAccessModifier <|> arraySubscriptModifier
     arraySubscriptModifier = do
       e <- between lsquare rsquare expressionParser
       return (\l -> ArraySubscript l e)
+
+nilParser :: Parsec String () ()
+nilParser = const () <$> (string "nil" >> notFollowedBy (alphaNum <|> (char '_')))
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p

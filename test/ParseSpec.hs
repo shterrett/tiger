@@ -10,7 +10,7 @@ spec :: Spec
 spec = do
   describe "formatting error messages" $ do
     it "shows the line, column and error on a failed parse" $ do
-      parse "1id" `shouldBe` Left "(line 1, column 1):\nunexpected \"1\"\nexpecting \"/*\", \"type\", \"var\", \"function\" or letter"
+      parse "1id" `shouldBe` Left "(line 1, column 1):\nunexpected \"1\"\nexpecting \"/*\", \"type\", \"var\", \"function\", letter or \"nil\""
   describe "parsing comments" $ do
     it "parses comments between /* and */" $ do
       Parsec.parse commentParser "" "/* this is a comment */" `shouldBe` Right " this is a comment "
@@ -94,3 +94,9 @@ spec = do
         `shouldBe` Right (ArraySubscript (Id "array") (LValExp $ RecordAccess (Id "x") "field_1"))
       Parsec.parse lvalueParser "" "x.field_1[y]"
         `shouldBe` Right (ArraySubscript (RecordAccess (Id "x") "field_1") (LValExp $ Id "y"))
+  describe "parsing nil" $ do
+    it "parses nil as Nil" $ do
+      Parsec.parse nilParser "" "nil" `shouldBe` Right ()
+    it "fails when nil is the beginning of a longer token" $ do
+      isLeft (Parsec.parse nilParser "" "nilish") `shouldBe` True
+      isLeft (Parsec.parse nilParser "" "nil_ish") `shouldBe` True
