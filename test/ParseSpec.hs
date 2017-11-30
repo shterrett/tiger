@@ -138,3 +138,10 @@ spec = do
       Parsec.parse negationParser "" "-a" `shouldBe` Right (LValExp $ Id "a")
     it "does not allow space after the hyphen" $ do
       isLeft (Parsec.parse negationParser "" "- a") `shouldBe` True
+  describe "function call" $ do
+    it "calls a function with its arguments" $ do
+      Parsec.parse funcParser "" "map(like, friends)"
+        `shouldBe` Right ("map", [LValExp (Id "like"), LValExp (Id "friends")])
+    it "calls a function without arguments" $ do
+      Parsec.parse funcParser "" "fireTheMissles()"
+        `shouldBe` Right ("fireTheMissles", [])

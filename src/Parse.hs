@@ -20,6 +20,7 @@ expressionParser =
     <|> try (IntLiteral <$> intParser)
     <|> try (StringLiteral <$> stringParser)
     <|> try (Negation <$> negationParser)
+    <|> try (uncurry FunctionCall <$> funcParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -70,6 +71,11 @@ stringParser =
 
 negationParser :: Parsec String () Expression
 negationParser = char '-' >> expressionParser
+
+funcParser :: Parsec String () (Atom, [Expression])
+funcParser =
+    let argList = between lparen rparen (sepBy expressionParser comma)
+    in(,) <$> atomParser <*> argList
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p
