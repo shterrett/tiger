@@ -132,6 +132,14 @@ plus = const Addition <$> (spaces >> (char '+') <* spaces)
 minus = const Subtraction <$> (spaces >> (string "- ") <* spaces)
 multby = const Multiplication <$> (spaces >> (char '*') <* spaces)
 divby = const Division <$> (spaces >> (char '/') <* spaces)
+greaterThan = const GreaterThan <$> (spaces >> ((char '>') <* (notFollowedBy $ char '=')) <* spaces)
+lessThan = const LessThan <$> (spaces >> ((char '<') <*  (notFollowedBy $ char '=')) <* spaces)
+greaterThanOrEqual = const GreaterThanOrEqual <$> (spaces >> (string ">=") <* spaces)
+lessThanOrEqual = const LessThanOrEqual <$> (spaces >> (string "<=") <* spaces)
+equality = const Equality <$> (spaces >> (char '=') <* spaces)
+nonEquality = const NonEquality <$> (spaces >> (string "!=") <* spaces)
+boolAnd = const And <$> (spaces >> (char '&') <* spaces)
+boolOr = const Or <$> (spaces >> (char '|') <* spaces)
 
 operatorParser :: Parsec String () Operator
 operatorParser =
@@ -139,3 +147,11 @@ operatorParser =
     <|> try minus
     <|> try multby
     <|> try divby
+    <|> try greaterThan
+    <|> try lessThan
+    <|> try greaterThanOrEqual
+    <|> try lessThanOrEqual
+    <|> try equality
+    <|> try nonEquality
+    <|> try boolAnd
+    <|> try boolOr
