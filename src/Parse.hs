@@ -24,6 +24,7 @@ expressionParser =
     <|> try (uncurry FunctionCall <$> funcParser)
     <|> try binopParser
     <|> try (uncurry RecordCreation <$> recordCreateParser)
+    <|> try ((\(t, e1, e2) -> ArrayCreation t e1 e2) <$> arrayCreateParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -97,6 +98,12 @@ recordCreateParser :: Parsec String () (Atom, [(Atom, Expression)])
 recordCreateParser = (,) <$> (atomParser <* spaces) <*> (between lbrace rbrace (sepBy fieldPairParser comma))
   where fieldPairParser = pairAtoms <$> atomParser <*> colon <*> expressionParser
         pairAtoms field _ expression = (field, expression)
+
+arrayCreateParser :: Parsec String () (Atom, Expression, Expression)
+arrayCreateParser = (,,) <$>
+                    (atomParser <* spaces) <*>
+                    (between lsquare rsquare expressionParser <* spaces) <*>
+                    (string "of" >> spaces >> expressionParser)
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p

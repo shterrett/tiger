@@ -171,3 +171,7 @@ spec = do
     it "parses a record and its fields" $ do
       Parsec.parse recordCreateParser "" "Person { name: \"Houdini\", email: \"imakitty@example.com\", age: 3 }"
         `shouldBe` Right ("Person", [("name", StringLiteral "Houdini"), ("email", StringLiteral "imakitty@example.com"), ("age", IntLiteral 3)])
+  describe "Array creation" $ do
+    it "parses an array creation" $ do
+      Parsec.parse arrayCreateParser "" "String [5] of \"hello\""
+        `shouldBe` Right ("String", IntLiteral 5, StringLiteral "hello")
