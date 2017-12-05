@@ -23,6 +23,7 @@ expressionParser =
     <|> try (Negation <$> negationParser)
     <|> try (uncurry FunctionCall <$> funcParser)
     <|> try binopParser
+    <|> try (uncurry RecordCreation <$> recordCreateParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -91,6 +92,11 @@ funcParser =
 binopParser :: Parsec String () Expression
 binopParser = chainl1 expressionParser operator
   where operator = BinOp <$> operatorParser
+
+recordCreateParser :: Parsec String () (Atom, [(Atom, Expression)])
+recordCreateParser = (,) <$> (atomParser <* spaces) <*> (between lbrace rbrace (sepBy fieldPairParser comma))
+  where fieldPairParser = pairAtoms <$> atomParser <*> colon <*> expressionParser
+        pairAtoms field _ expression = (field, expression)
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p

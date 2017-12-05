@@ -167,3 +167,7 @@ spec = do
       it "parses and and or" $ do
         Parsec.parse binopParser "" "x & y" `shouldBe` Right (BinOp And (LValExp $ Id "x") (LValExp $ Id "y"))
         Parsec.parse binopParser "" "x | y" `shouldBe` Right (BinOp Or (LValExp $ Id "x") (LValExp $ Id "y"))
+  describe "Record creation" $ do
+    it "parses a record and its fields" $ do
+      Parsec.parse recordCreateParser "" "Person { name: \"Houdini\", email: \"imakitty@example.com\", age: 3 }"
+        `shouldBe` Right ("Person", [("name", StringLiteral "Houdini"), ("email", StringLiteral "imakitty@example.com"), ("age", IntLiteral 3)])

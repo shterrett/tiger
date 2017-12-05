@@ -32,7 +32,7 @@ data Expression =
     | Negation Expression
     | FunctionCall Atom [Expression]
     | BinOp Operator Expression Expression
-    | Record
+    | RecordCreation TypeName [(Atom, Expression)]
     | Array
     | Assignment LValue Expression
     | IfThenElse Expression Expression Expression
