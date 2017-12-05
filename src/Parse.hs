@@ -25,6 +25,8 @@ expressionParser =
     <|> try binopParser
     <|> try (uncurry RecordCreation <$> recordCreateParser)
     <|> try ((\(t, e1, e2) -> ArrayCreation t e1 e2) <$> arrayCreateParser)
+    <|> try ((\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser)
+    <|> try (uncurry IfThen <$> ifThenParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -104,6 +106,17 @@ arrayCreateParser = (,,) <$>
                     (atomParser <* spaces) <*>
                     (between lsquare rsquare expressionParser <* spaces) <*>
                     (string "of" >> spaces >> expressionParser)
+
+ifThenElseParser :: Parsec String () (Expression, Expression, Expression)
+ifThenElseParser = (,,) <$>
+                   (string "if" >> spaces >> expressionParser <* spaces) <*>
+                   (string "then" >> spaces >> expressionParser <* spaces) <*>
+                   (string "else" >> spaces >> expressionParser <* spaces)
+
+ifThenParser :: Parsec String () (Expression, Expression)
+ifThenParser = (,) <$>
+               (string "if" >> spaces >> expressionParser <* spaces) <*>
+               (string "then" >> spaces >> expressionParser <* spaces)
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p

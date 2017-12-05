@@ -175,3 +175,10 @@ spec = do
     it "parses an array creation" $ do
       Parsec.parse arrayCreateParser "" "String [5] of \"hello\""
         `shouldBe` Right ("String", IntLiteral 5, StringLiteral "hello")
+  describe "If Expressions" $ do
+    it "parses an if-then-else" $ do
+      Parsec.parse ifThenElseParser "" "if a\nthen b\nelse c"
+        `shouldBe` Right (LValExp $ Id "a", LValExp $ Id "b", LValExp $ Id "c")
+    it "parses an if-then" $ do
+      Parsec.parse ifThenParser "" "if a\nthen b"
+        `shouldBe` Right (LValExp $ Id "a", LValExp $ Id "b")
