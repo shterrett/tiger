@@ -182,3 +182,25 @@ spec = do
     it "parses an if-then" $ do
       Parsec.parse ifThenParser "" "if a\nthen b"
         `shouldBe` Right (LValExp $ Id "a", LValExp $ Id "b")
+  describe "Assignment" $ do
+    it "parses := as assignment" $ do
+      Parsec.parse assignmentParser "" "x := 5"
+        `shouldBe` Right (Id "x", IntLiteral 5)
+  describe "while loops" $ do
+    it "parses while ... do ... as a while loope" $ do
+      Parsec.parse whileParser "" "while x do y"
+        `shouldBe` Right (LValExp $ Id "x", LValExp $ Id "y")
+    it "handles newlines" $ do
+      Parsec.parse whileParser "" "while x\ndo y"
+        `shouldBe` Right (LValExp $ Id "x", LValExp $ Id "y")
+  describe "for loops" $ do
+    it "parses for ... to ... do ..." $ do
+      Parsec.parse forParser "" "for x := 5 to 10 do panic"
+        `shouldBe` Right ("x", IntLiteral 5, IntLiteral 10, LValExp $ Id "panic")
+  describe "break" $ do
+    it "parses break when it stands alone" $ do
+      Parsec.parse breakParser "" "break" `shouldBe` Right ()
+      Parsec.parse breakParser "" " break " `shouldBe` Right ()
+    it "does not parse break when it's part of another atom" $ do
+      isLeft (Parsec.parse breakParser "" "break_down") `shouldBe` True
+      isLeft (Parsec.parse breakParser "" "daybreak") `shouldBe` True

@@ -27,6 +27,9 @@ expressionParser =
     <|> try ((\(t, e1, e2) -> ArrayCreation t e1 e2) <$> arrayCreateParser)
     <|> try ((\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser)
     <|> try (uncurry IfThen <$> ifThenParser)
+    <|> try (uncurry Assignment <$> assignmentParser)
+    <|> try (uncurry While <$> whileParser)
+    <|> try ((\(var, start, end, exp) -> For var start end exp) <$> forParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -117,6 +120,24 @@ ifThenParser :: Parsec String () (Expression, Expression)
 ifThenParser = (,) <$>
                (string "if" >> spaces >> expressionParser <* spaces) <*>
                (string "then" >> spaces >> expressionParser <* spaces)
+
+assignmentParser :: Parsec String () (LValue, Expression)
+assignmentParser = (,) <$> (lvalueParser <* (spaces >> string ":=" >> spaces)) <*> expressionParser
+
+whileParser :: Parsec String () (Expression, Expression)
+whileParser = (,) <$>
+              (string "while" >> spaces >> expressionParser) <*>
+              (spaces >> string "do" >> spaces >> expressionParser)
+
+forParser :: Parsec String () (Atom, Expression, Expression, Expression)
+forParser = (,,,) <$>
+            (string "for" >> spaces >> atomParser) <*>
+            (spaces >> string ":=" >> spaces >> expressionParser) <*>
+            (spaces >> string "to" >> spaces >> expressionParser) <*>
+            (spaces >> string "do" >> spaces >> expressionParser)
+
+breakParser :: Parsec String () ()
+breakParser = (spaces >> string "break" >> spaces) >> notFollowedBy (alphaNum <|> char '_')
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p
