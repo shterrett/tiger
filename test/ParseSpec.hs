@@ -1,6 +1,8 @@
 module ParseSpec where
 
-import Data.Either (isLeft, lefts)
+import Data.Either (isRight, isLeft, lefts)
+import Data.List (isSuffixOf)
+import System.Directory (getDirectoryContents)
 import Test.Hspec
 import qualified Text.Parsec as Parsec (parse, ParseError, Parsec)
 import Parse
@@ -275,3 +277,15 @@ spec = do
               ]
               [FunctionCall "do_nothing1" [IntLiteral 0, StringLiteral "str2"]]
         )
+    it "parses all the things" $ do
+      let syntaxErrors = ["test49.tig"]
+      names <- filter (flip notElem $ syntaxErrors) <$>
+               filter (isSuffixOf "tig") <$>
+               getDirectoryContents "test/testcases"
+      programs <- sequence $ readFile . (++) "test/testcases/" <$> names
+      length programs `shouldNotBe` 0
+      let results = fst <$> (filter (\(_, e) -> isLeft e) $ (zip names (parse <$> programs)))
+      results `shouldBe` []
+      errorPrograms <- sequence $ readFile . (++) "test/testcases/" <$> syntaxErrors
+      let errorResults = fst <$> (filter (\(_, e) -> isRight e) $ (zip syntaxErrors (parse <$> errorPrograms)))
+      errorResults `shouldBe` []
