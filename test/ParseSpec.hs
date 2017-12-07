@@ -188,6 +188,12 @@ spec = do
       it "parses and and or" $ do
         Parsec.parse binopParser "" "x & y" `shouldBe` Right (BinOp And (LValExp $ Id "x") (LValExp $ Id "y"))
         Parsec.parse binopParser "" "x | y" `shouldBe` Right (BinOp Or (LValExp $ Id "x") (LValExp $ Id "y"))
+    describe "left associative" $ do
+      it "parses multiple binary operations" $ do
+        Parsec.parse binopParser "" "3 + 5 - 10"
+          `shouldBe` Right (BinOp Subtraction
+                                  (BinOp Addition (IntLiteral 3) (IntLiteral 5))
+                                  (IntLiteral 10))
   describe "Record creation" $ do
     it "parses a record and its fields" $ do
       Parsec.parse recordCreateParser "" "Person { name: \"Houdini\", email: \"imakitty@example.com\", age: 3 }"
@@ -235,13 +241,37 @@ spec = do
       Parsec.parse groupParser "" "(3)"
         `shouldBe` Right (IntLiteral 3)
   describe "expression" $ do
-    it "correctly parses example programs" $ do
+    it "correctly parses example program 1" $ do
       test1 <- readFile "test/testcases/test1.tig"
       parse test1 `shouldBe`
         Right (
           Just " an array type and an array variable "
-        , Let [ TypeDec "arraytype" (ArrayOf "int")
+        , Let [ TypeDec "arrtype" (ArrayOf "int")
               , VarDec "arr1" (Just "arrtype") (ArrayCreation "arrtype" (IntLiteral 10) (IntLiteral 0))
               ]
               [ LValExp $ Id "arr1" ]
+        )
+    it "correctly parses example program 7" $ do
+      test7 <- readFile "test/testcases/test7.tig"
+      parse test7 `shouldBe`
+        Right (
+          Just " define valid mutually recursive functions "
+        , Let [ FnDec "do_nothing1"
+                      [("a", "int"), ("b", "string")]
+                      (Just "int")
+                      (Sequence [ FunctionCall "do_nothing2"
+                                               [BinOp Addition (LValExp $ Id "a") (IntLiteral 1)]
+                                , IntLiteral 0
+                                ])
+              , FnDec "do_nothing2"
+                      [("d", "int")]
+                      (Just "string")
+                      (Sequence [ FunctionCall "do_nothing1"
+                                               [ LValExp $ Id "d"
+                                               , StringLiteral "str"
+                                               ]
+                                , StringLiteral " "
+                                ])
+              ]
+              [FunctionCall "do_nothing1" [IntLiteral 0, StringLiteral "str2"]]
         )

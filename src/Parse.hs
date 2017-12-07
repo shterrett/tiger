@@ -16,25 +16,37 @@ parse s = case Parsec.parse programParser "" s of
 expressionParser :: Parsec String () Expression
 expressionParser =
     Comment <$> commentParser
-    <|> DecExp <$> declarationParser
-    <|> LValExp <$> lvalueParser
-    <|> const Nil <$> nilParser
-    <|> const NoValue <$> noValueParser
-    <|> Sequence <$> (between lparen rparen $ sequenceParser)
-    <|> IntLiteral <$> intParser
-    <|> StringLiteral <$> stringParser
-    <|> Negation <$> negationParser
-    <|> uncurry FunctionCall <$> funcParser
-    <|> binopParser
-    <|> uncurry RecordCreation <$> recordCreateParser
-    <|> (\(t, e1, e2) -> ArrayCreation t e1 e2) <$> arrayCreateParser
-    <|> (\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser
-    <|> uncurry IfThen <$> ifThenParser
-    <|> uncurry Assignment <$> assignmentParser
-    <|> uncurry While <$> whileParser
-    <|> (\(var, start, end, exp) -> For var start end exp) <$> forParser
-    <|> (uncurry Let) <$> letParser
-    <|> Grouped <$> groupParser
+    <|> try ((\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser)
+    <|> try (uncurry IfThen <$> ifThenParser)
+    <|> try ((\(t, e1, e2) -> ArrayCreation t e1 e2) <$> arrayCreateParser)
+    <|> try (DecExp <$> declarationParser)
+    <|> try (Sequence <$> (between lparen rparen $ sequenceParser))
+    <|> try (Grouped <$> groupParser)
+    <|> try ((uncurry Let) <$> letParser)
+    <|> try (Negation <$> negationParser)
+    <|> try (uncurry FunctionCall <$> funcParser)
+    <|> try (binopParser)
+    <|> try (uncurry RecordCreation <$> recordCreateParser)
+    <|> try (uncurry Assignment <$> assignmentParser)
+    <|> try (uncurry While <$> whileParser)
+    <|> try ((\(var, start, end, exp) -> For var start end exp) <$> forParser)
+    <|> try (LValExp <$> lvalueParser)
+    <|> try (StringLiteral <$> stringParser)
+    <|> try (IntLiteral <$> intParser)
+    <|> try (const Nil <$> nilParser)
+    <|> try (const NoValue <$> noValueParser)
+
+binopableParser :: Parsec String () Expression
+binopableParser =
+    try (LValExp <$> lvalueParser)
+    <|> try (Sequence <$> (between lparen rparen $ sequenceParser))
+    <|> try (IntLiteral <$> intParser)
+    <|> try (StringLiteral <$> stringParser)
+    <|> try (Negation <$> negationParser)
+    <|> try (uncurry FunctionCall <$> funcParser)
+    <|> try ((\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser)
+    <|> try (uncurry IfThen <$> ifThenParser)
+    <|> try (Grouped <$> groupParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -101,7 +113,7 @@ funcParser =
     in (,) <$> atomParser <*> argList
 
 binopParser :: Parsec String () Expression
-binopParser = chainl1 expressionParser operator
+binopParser = chainl1 binopableParser operator
   where operator = BinOp <$> operatorParser
 
 recordCreateParser :: Parsec String () (Atom, [(Atom, Expression)])
