@@ -31,6 +31,7 @@ expressionParser =
     <|> try (uncurry While <$> whileParser)
     <|> try ((\(var, start, end, exp) -> For var start end exp) <$> forParser)
     <|> try ((uncurry Let) <$> letParser)
+    <|> try (Grouped <$> groupParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -146,6 +147,9 @@ letParser = (,) <$>
                     (string "in" >> spaces)
                     (sepEndBy1 declarationParser spaces) <*>
             (spaces >> sequenceParser <* spaces <* string "end")
+
+groupParser :: Parsec String () Expression
+groupParser = between lparen rparen expressionParser
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p

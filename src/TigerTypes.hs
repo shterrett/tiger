@@ -41,7 +41,7 @@ data Expression =
     | For Atom Expression Expression Expression
     | Break
     | Let DeclarationList [Expression]
-    | Grouped [Expression]
+    | Grouped Expression
     deriving (Show, Eq)
 data Operator =
     Addition

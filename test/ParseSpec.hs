@@ -209,3 +209,8 @@ spec = do
       Parsec.parse letParser "" "let var x := 5\nin x\nend"
         `shouldBe` Right ([(VarDec "x" Nothing $  IntLiteral 5)],
                           [LValExp $ Id "x"])
+  describe "group parser" $ do
+    it "parses an expression surrounded by parentheses" $ do
+      Parsec.parse groupParser "" "(3)"
+        `shouldBe` Right (IntLiteral 3)
+
