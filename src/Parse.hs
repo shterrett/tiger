@@ -17,7 +17,7 @@ expressionParser =
     <|> LValExp <$> lvalueParser
     <|> try (const Nil <$> nilParser)
     <|> try (const NoValue <$> noValueParser)
-    <|> Sequence <$> sequenceParser
+    <|> Sequence <$> (between lparen rparen $ sequenceParser)
     <|> IntLiteral <$> intParser
     <|> try (StringLiteral <$> stringParser)
     <|> try (Negation <$> negationParser)
@@ -30,6 +30,7 @@ expressionParser =
     <|> try (uncurry Assignment <$> assignmentParser)
     <|> try (uncurry While <$> whileParser)
     <|> try ((\(var, start, end, exp) -> For var start end exp) <$> forParser)
+    <|> try ((uncurry Let) <$> letParser)
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -72,7 +73,7 @@ noValueParser :: Parsec String () ()
 noValueParser = const () <$> between lparen rparen spaces
 
 sequenceParser :: Parsec String () [Expression]
-sequenceParser = between lparen rparen $ sepBy expressionParser semicolon
+sequenceParser =  sepBy expressionParser semicolon
 
 intParser :: Parsec String () Integer
 intParser = read <$> ((many1 digit) <* notFollowedBy (alphaNum <|> (char '_')))
@@ -138,6 +139,13 @@ forParser = (,,,) <$>
 
 breakParser :: Parsec String () ()
 breakParser = (spaces >> string "break" >> spaces) >> notFollowedBy (alphaNum <|> char '_')
+
+letParser :: Parsec String () ([Declaration], [Expression])
+letParser = (,) <$>
+            between (string "let" >> spaces)
+                    (string "in" >> spaces)
+                    (sepEndBy1 declarationParser spaces) <*>
+            (spaces >> sequenceParser <* spaces <* string "end")
 
 leftRec :: Parsec String () a -> Parsec String () (a -> a) -> Parsec String () a
 leftRec p op = rest =<< p

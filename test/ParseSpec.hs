@@ -107,11 +107,11 @@ spec = do
       Parsec.parse noValueParser "" "( )" `shouldBe` Right ()
   describe "parsing sequence of expressions" $ do
     it "returns a list of parsed expressions" $ do
-      Parsec.parse sequenceParser "" "(var x := y; var z := x)"
+      Parsec.parse sequenceParser "" "var x := y; var z := x"
         `shouldBe` Right ([(DecExp $ VarDec "x" Nothing (LValExp $ Id "y")),
                            (DecExp $ VarDec "z" Nothing (LValExp $ Id "x"))])
     it "allows spaces within the list" $ do
-      Parsec.parse sequenceParser "" "( var x := y ; var z := x )"
+      Parsec.parse sequenceParser "" "var x := y ; var z := x"
         `shouldBe` Right ([(DecExp $ VarDec "x" Nothing (LValExp $ Id "y")),
                            (DecExp $ VarDec "z" Nothing (LValExp $ Id "x"))])
   describe "parsing integers" $ do
@@ -204,3 +204,8 @@ spec = do
     it "does not parse break when it's part of another atom" $ do
       isLeft (Parsec.parse breakParser "" "break_down") `shouldBe` True
       isLeft (Parsec.parse breakParser "" "daybreak") `shouldBe` True
+  describe "let - in" $ do
+    it "parses a sequence of assignments and a sequence of expressions" $ do
+      Parsec.parse letParser "" "let var x := 5\nin x\nend"
+        `shouldBe` Right ([(VarDec "x" Nothing $  IntLiteral 5)],
+                          [LValExp $ Id "x"])
