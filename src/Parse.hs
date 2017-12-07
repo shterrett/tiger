@@ -5,10 +5,11 @@ import Text.Parsec hiding (parse)
 import qualified Text.Parsec as Parsec (parse)
 import Text.Parsec.Char
 
-parse :: String -> Either String Expression
-parse s = case Parsec.parse expressionParser "" s of
+parse :: String -> Either String (Maybe String, Expression)
+parse s = case Parsec.parse programParser "" s of
           Right exp -> Right exp
           Left e -> Left $ show e
+  where programParser = (,) <$> optionMaybe commentParser <*> expressionParser
 
 expressionParser :: Parsec String () Expression
 expressionParser =

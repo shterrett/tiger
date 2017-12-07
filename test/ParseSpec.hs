@@ -213,4 +213,14 @@ spec = do
     it "parses an expression surrounded by parentheses" $ do
       Parsec.parse groupParser "" "(3)"
         `shouldBe` Right (IntLiteral 3)
-
+  describe "expression" $ do
+    it "correctly parses example programs" $ do
+      test1 <- readFile "test/testcases/test1.tig"
+      parse test1 `shouldBe`
+        Right (
+          Just " an array type and an array variable "
+        , Let [ TypeDec "arraytype" (ArrayOf "int")
+              , VarDec "arr1" (Just "arrtype") (ArrayCreation "arrtype" (IntLiteral 10) (IntLiteral 0))
+              ]
+              [ LValExp $ Id "arr1" ]
+        )
