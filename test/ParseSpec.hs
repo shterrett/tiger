@@ -15,6 +15,27 @@ spec = do
   describe "parsing comments" $ do
     it "parses comments between /* and */" $ do
       Parsec.parse commentParser "" "/* this is a comment */" `shouldBe` Right " this is a comment "
+  describe "reserved words" $ do
+    let reservedWords = [ "let"
+                        , "in"
+                        , "if"
+                        , "then"
+                        , "else"
+                        , "end"
+                        , "var"
+                        , "type"
+                        , "function"
+                        , "array"
+                        , "of"
+                        , "nil"
+                        , "while"
+                        , "for"
+                        , "to"
+                        , "break"
+                        ]
+    it "parses reserved words" $ do
+      Parsec.parse reservedWordsParser "" <$> reservedWords `shouldBe`
+        Right <$> reservedWords
   describe "parsing declarations" $ do
     describe "parsing type declarations" $ do
       let fieldParser = typeFieldParser lbrace rbrace
@@ -77,22 +98,22 @@ spec = do
           `shouldBe` Right (RecordAccess (RecordAccess (Id "record") "field_1") "field_2")
     describe "parsing array accesses" $ do
       it "uses the square brackets to denote an array access" $ do
-        Parsec.parse lvalueParser "" "array[x]" `shouldBe` Right (ArraySubscript (Id "array") (LValExp $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[x]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
       it "allows arbitrary space within the brackets" $ do
-        Parsec.parse lvalueParser "" "array[ x]" `shouldBe` Right (ArraySubscript (Id "array") (LValExp $ Id "x"))
-        Parsec.parse lvalueParser "" "array[x ]" `shouldBe` Right (ArraySubscript (Id "array") (LValExp $ Id "x"))
-        Parsec.parse lvalueParser "" "array[ x ]" `shouldBe` Right (ArraySubscript (Id "array") (LValExp $ Id "x"))
-        Parsec.parse lvalueParser "" "array[\nx]" `shouldBe` Right (ArraySubscript (Id "array") (LValExp $ Id "x"))
-        Parsec.parse lvalueParser "" "array[x\n]" `shouldBe` Right (ArraySubscript (Id "array") (LValExp $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[ x]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[x ]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[ x ]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[\nx]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[x\n]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
       it "does not allow empty brackets" $ do
         isLeft (Parsec.parse lvalueParser "" "array[]") `shouldBe` True
         isLeft (Parsec.parse lvalueParser "" "array[  ]") `shouldBe` True
 
     it "allows combinations" $ do
-      Parsec.parse lvalueParser "" "array[x].field_1"
-        `shouldBe` Right (RecordAccess (ArraySubscript (Id "array") (LValExp $ Id "x")) "field_1")
-      Parsec.parse lvalueParser "" "array[x.field_1]"
-        `shouldBe` Right (ArraySubscript (Id "array") (LValExp $ RecordAccess (Id "x") "field_1"))
+      Parsec.parse lvalueParser "" "arr[x].field_1"
+        `shouldBe` Right (RecordAccess (ArraySubscript (Id "arr") (LValExp $ Id "x")) "field_1")
+      Parsec.parse lvalueParser "" "arr[x.field_1]"
+        `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ RecordAccess (Id "x") "field_1"))
       Parsec.parse lvalueParser "" "x.field_1[y]"
         `shouldBe` Right (ArraySubscript (RecordAccess (Id "x") "field_1") (LValExp $ Id "y"))
   describe "parsing nil" $ do

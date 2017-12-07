@@ -9,30 +9,32 @@ parse :: String -> Either String (Maybe String, Expression)
 parse s = case Parsec.parse programParser "" s of
           Right exp -> Right exp
           Left e -> Left $ show e
-  where programParser = (,) <$> optionMaybe commentParser <*> expressionParser
+  where programParser = (,) <$>
+                        optionMaybe (commentParser <* spaces)
+                        <*> expressionParser
 
 expressionParser :: Parsec String () Expression
 expressionParser =
-    try (Comment <$> commentParser)
-    <|> try (DecExp <$> declarationParser)
+    Comment <$> commentParser
+    <|> DecExp <$> declarationParser
     <|> LValExp <$> lvalueParser
-    <|> try (const Nil <$> nilParser)
-    <|> try (const NoValue <$> noValueParser)
+    <|> const Nil <$> nilParser
+    <|> const NoValue <$> noValueParser
     <|> Sequence <$> (between lparen rparen $ sequenceParser)
     <|> IntLiteral <$> intParser
-    <|> try (StringLiteral <$> stringParser)
-    <|> try (Negation <$> negationParser)
-    <|> try (uncurry FunctionCall <$> funcParser)
-    <|> try binopParser
-    <|> try (uncurry RecordCreation <$> recordCreateParser)
-    <|> try ((\(t, e1, e2) -> ArrayCreation t e1 e2) <$> arrayCreateParser)
-    <|> try ((\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser)
-    <|> try (uncurry IfThen <$> ifThenParser)
-    <|> try (uncurry Assignment <$> assignmentParser)
-    <|> try (uncurry While <$> whileParser)
-    <|> try ((\(var, start, end, exp) -> For var start end exp) <$> forParser)
-    <|> try ((uncurry Let) <$> letParser)
-    <|> try (Grouped <$> groupParser)
+    <|> StringLiteral <$> stringParser
+    <|> Negation <$> negationParser
+    <|> uncurry FunctionCall <$> funcParser
+    <|> binopParser
+    <|> uncurry RecordCreation <$> recordCreateParser
+    <|> (\(t, e1, e2) -> ArrayCreation t e1 e2) <$> arrayCreateParser
+    <|> (\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser
+    <|> uncurry IfThen <$> ifThenParser
+    <|> uncurry Assignment <$> assignmentParser
+    <|> uncurry While <$> whileParser
+    <|> (\(var, start, end, exp) -> For var start end exp) <$> forParser
+    <|> (uncurry Let) <$> letParser
+    <|> Grouped <$> groupParser
 
 commentParser :: Parsec String () String
 commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
@@ -40,7 +42,7 @@ commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
 declarationParser :: Parsec String () Declaration
 declarationParser = try typeDeclarationParser
   <|> try variableDeclarationParser
-  <|> functionDeclarationParser
+  <|> try functionDeclarationParser
   where typeDeclarationParser = TypeDec
                                 <$> (string "type" >> spaces >> typeNameParser)
                                 <*> (spaces >> char '=' >> spaces >> typeParser)
@@ -161,7 +163,7 @@ leftRec p op = rest =<< p
 
 typeParser :: Parsec String () Type
 typeParser = try (fmap RecordOf $ typeFieldParser lbrace rbrace)
-             <|> try (fmap ArrayOf (string "array of " >> typeNameParser))
+             <|> try (fmap ArrayOf (string "array of" >> spaces >> typeNameParser))
              <|> fmap  TypeId typeNameParser
 
 typeFieldParser :: Parsec String () String -> Parsec String () String -> Parsec String () TypeFields
@@ -170,10 +172,32 @@ typeFieldParser lsep rsep = between lsep rsep (sepBy fieldPairParser comma)
         pairAtoms (field:_:typeId:[]) = (field, typeId)
 
 atomParser :: Parsec String () Atom
-atomParser = fmap concat (sequence [count 1 letter, many (alphaNum <|> (char '_'))])
+atomParser = (try reservedWordsParser >>= (\w -> unexpected $ "Reserved Word " ++ w))
+    <|> fmap concat (sequence [count 1 letter, many (alphaNum <|> (char '_'))])
 
 typeNameParser :: Parsec String () TypeName
 typeNameParser = atomParser
+
+reservedWordsParser :: Parsec String () String
+reservedWordsParser =
+    let reservedWords = [ "let"
+                        , "in"
+                        , "if"
+                        , "then"
+                        , "else"
+                        , "end"
+                        , "var"
+                        , "type"
+                        , "function"
+                        , "array"
+                        , "of"
+                        , "nil"
+                        , "while"
+                        , "for"
+                        , "to"
+                        , "break"
+                        ]
+    in choice $ (\w -> try (string w) <* notFollowedBy (alphaNum <|> char '_')) <$> reservedWords
 
 colon = try $ charToString (char ':' <* spaces)
 semicolon = try $ charToString (spaces >> char ';' <* spaces)
