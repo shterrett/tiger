@@ -25,7 +25,7 @@ expressionParser =
     <|> try ((uncurry Let) <$> letParser)
     <|> try (Negation <$> negationParser)
     <|> try (uncurry FunctionCall <$> funcParser)
-    <|> try (binopParser)
+    <|> try binopParser
     <|> try (uncurry RecordCreation <$> recordCreateParser)
     <|> try (uncurry Assignment <$> assignmentParser)
     <|> try (uncurry While <$> whileParser)
@@ -113,12 +113,12 @@ funcParser =
     in (,) <$> atomParser <*> argList
 
 binopParser :: Parsec String () Expression
-binopParser = chainl1 binopableParser operator
+binopParser = (lookAhead $ try (manyTill (alphaNum <|> space <|> char '_') (try operatorParser))) >> chainl1 binopableParser operator
   where operator = BinOp <$> operatorParser
 
 recordCreateParser :: Parsec String () (Atom, [(Atom, Expression)])
 recordCreateParser = (,) <$> (atomParser <* spaces) <*> (between lbrace rbrace (sepBy fieldPairParser comma))
-  where fieldPairParser = pairAtoms <$> atomParser <*> colon <*> expressionParser
+  where fieldPairParser = pairAtoms <$> atomParser <*> equals <*> expressionParser
         pairAtoms field _ expression = (field, expression)
 
 arrayCreateParser :: Parsec String () (Atom, Expression, Expression)
@@ -213,7 +213,8 @@ reservedWordsParser =
 
 colon = try $ charToString (char ':' <* spaces)
 semicolon = try $ charToString (spaces >> char ';' <* spaces)
-comma = try $ charToString (char ',' <* spaces)
+equals = try $ charToString (spaces >> char '=' <* spaces)
+comma = try $ charToString (spaces >> char ',' <* spaces)
 lbrace = try $ charToString (char '{' <* spaces)
 rbrace = try $ charToString (spaces >> char '}')
 lparen = try $ charToString (char '(' <* spaces)

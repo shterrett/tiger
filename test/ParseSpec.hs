@@ -12,7 +12,7 @@ spec :: Spec
 spec = do
   describe "formatting error messages" $ do
     it "shows the line, column and error on a failed parse" $ do
-      let errorPrefix = "(line 1, column 3):\nunexpected 'i'"
+      let errorPrefix = "(line 1, column 4):\nunexpected end"
       (take (length errorPrefix)) <$> (lefts [parse "1id"]) `shouldBe` [errorPrefix]
   describe "parsing comments" $ do
     it "parses comments between /* and */" $ do
@@ -49,6 +49,8 @@ spec = do
           Right [("field_1", "value_1"), ("field_2", "value_2")]
         Parsec.parse fieldParser ""  "{field_1:value_1,field_2:value_2}" `shouldBe`
           Right [("field_1", "value_1"), ("field_2", "value_2")]
+        Parsec.parse fieldParser ""  "{field_1:value_1 , field_2:value_2}" `shouldBe`
+          Right [("field_1", "value_1"), ("field_2", "value_2")]
       it "requires a field and value" $ do
         isLeft (Parsec.parse fieldParser ""  "{ field_1: , field_2: value_2 }") `shouldBe` True
         isLeft (Parsec.parse fieldParser ""  "{ value_1 , field_2: value_2 }") `shouldBe` True
@@ -67,6 +69,8 @@ spec = do
       it "parses assignment with a type id" $ do
         Parsec.parse declarationParser "" "var x: string := y"
           `shouldBe` Right (VarDec "x" (Just "string") (LValExp $ Id "y"))
+        Parsec.parse declarationParser "" "var rec1: rectype1 := rectype2 {name=\"Name\", id=0}"
+          `shouldBe` Right (VarDec "rec1" (Just "rectype1") (RecordCreation "rectype2" [("name", StringLiteral "Name"), ("id", IntLiteral 0)]))
       it "parses assignment without a type id" $ do
         Parsec.parse declarationParser "" "var x := y" `shouldBe` Right (VarDec "x" Nothing (LValExp $ Id "y"))
     describe "parsing function declaration" $ do
@@ -177,7 +181,7 @@ spec = do
         Parsec.parse binopParser "" "3 - 5" `shouldBe` Right (BinOp Subtraction (IntLiteral 3) (IntLiteral 5))
         Parsec.parse binopParser "" "3 / 5" `shouldBe` Right (BinOp Division (IntLiteral 3) (IntLiteral 5))
       it "requires space after the subtraction operator" $ do
-        Parsec.parse binopParser "" "3-5" `shouldBe` Right (IntLiteral 3)
+        isLeft (Parsec.parse binopParser "" "3-5") `shouldBe` True
     describe "comparisons" $ do
       it "parses comparison operations" $ do
         Parsec.parse binopParser "" "3 > 5" `shouldBe` Right (BinOp GreaterThan (IntLiteral 3) (IntLiteral 5))
@@ -196,9 +200,12 @@ spec = do
           `shouldBe` Right (BinOp Subtraction
                                   (BinOp Addition (IntLiteral 3) (IntLiteral 5))
                                   (IntLiteral 10))
+    describe "partial match" $ do
+      it "does not match an expression without an operator" $ do
+        isLeft (Parsec.parse binopParser "" "5") `shouldBe` True
   describe "Record creation" $ do
     it "parses a record and its fields" $ do
-      Parsec.parse recordCreateParser "" "Person { name: \"Houdini\", email: \"imakitty@example.com\", age: 3 }"
+      Parsec.parse recordCreateParser "" "Person { name = \"Houdini\", email = \"imakitty@example.com\", age = 3 }"
         `shouldBe` Right ("Person", [("name", StringLiteral "Houdini"), ("email", StringLiteral "imakitty@example.com"), ("age", IntLiteral 3)])
   describe "Array creation" $ do
     it "parses an array creation" $ do
