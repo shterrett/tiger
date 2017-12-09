@@ -4,19 +4,31 @@ import TigerTypes
 import Text.Parsec hiding (parse)
 import qualified Text.Parsec as Parsec (parse)
 import Text.Parsec.Char
+import Data.Char (isSpace)
 
-parse :: String -> Either String (Maybe String, Expression)
-parse s = case Parsec.parse programParser "" s of
+parse :: String -> Either String Expression
+parse s = case Parsec.parse expressionParser "" (prepareProgram s) of
           Right exp -> Right exp
           Left e -> Left $ show e
-  where programParser = (,) <$>
-                        optionMaybe (commentParser <* spaces)
-                        <*> expressionParser
+    where prepareProgram = stripLeadingWhitespace . stripComments
+
+stripComments :: String -> String
+stripComments = commentStripper Take ""
+
+data CommentState = Take | Pass
+commentStripper :: CommentState -> String -> String -> String
+commentStripper _ taken [] = reverse taken
+commentStripper Take taken ('/':'*':rest) = commentStripper Pass taken rest
+commentStripper Take taken (c:rest) = commentStripper Take (c:taken) rest
+commentStripper Pass taken ('*':'/':rest) = commentStripper Take taken rest
+commentStripper Pass taken (c:rest) = commentStripper Pass taken rest
+
+stripLeadingWhitespace :: String -> String
+stripLeadingWhitespace = dropWhile isSpace
 
 expressionParser :: Parsec String () Expression
 expressionParser =
-    Comment <$> commentParser
-    <|> try ((\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser)
+    try ((\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser)
     <|> try (uncurry IfThen <$> ifThenParser)
     <|> try ((\(t, e1, e2) -> ArrayCreation t e1 e2) <$> arrayCreateParser)
     <|> try (DecExp <$> declarationParser)
@@ -38,18 +50,15 @@ expressionParser =
 
 binopableParser :: Parsec String () Expression
 binopableParser =
-    try (LValExp <$> lvalueParser)
+    try (uncurry FunctionCall <$> funcParser)
+    <|> try (LValExp <$> lvalueParser)
     <|> try (Sequence <$> (between lparen rparen $ sequenceParser))
     <|> try (IntLiteral <$> intParser)
     <|> try (StringLiteral <$> stringParser)
     <|> try (Negation <$> negationParser)
-    <|> try (uncurry FunctionCall <$> funcParser)
     <|> try ((\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser)
     <|> try (uncurry IfThen <$> ifThenParser)
     <|> try (Grouped <$> groupParser)
-
-commentParser :: Parsec String () String
-commentParser = string "/*" >> manyTill anyChar (try $ string "*/")
 
 declarationParser :: Parsec String () Declaration
 declarationParser = try typeDeclarationParser

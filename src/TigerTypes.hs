@@ -21,7 +21,6 @@ data LValue =
     deriving (Show, Eq)
 data Expression =
     LValExp LValue
-    | Comment String
     | DecExp Declaration
     | ValuelessExpression Expression
     | Nil

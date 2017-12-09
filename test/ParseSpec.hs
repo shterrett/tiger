@@ -14,9 +14,16 @@ spec = do
     it "shows the line, column and error on a failed parse" $ do
       let errorPrefix = "(line 1, column 4):\nunexpected end"
       (take (length errorPrefix)) <$> (lefts [parse "1id"]) `shouldBe` [errorPrefix]
-  describe "parsing comments" $ do
-    it "parses comments between /* and */" $ do
-      Parsec.parse commentParser "" "/* this is a comment */" `shouldBe` Right " this is a comment "
+  describe "preparing program" $ do
+    it "parses program without caring about comments" $ do
+      parse "var /* variable declaration */ x /* named x */:int /* type integer */ := /* equals */ 5 /* five */"
+        `shouldBe` Right (DecExp $ VarDec "x" (Just "int") (IntLiteral 5))
+    it "strips multiline comments" $ do
+      parse "var x /* multiline\ncomment */ := 5"
+        `shouldBe` Right (DecExp $ VarDec "x" Nothing (IntLiteral 5))
+    it "strips leading whitespace left by comments" $ do
+      parse "/* hello! */ var /* variable declaration */ x /* named x */:int /* type integer */ := /* equals */ 5 /* five */"
+        `shouldBe` Right (DecExp $ VarDec "x" (Just "int") (IntLiteral 5))
   describe "reserved words" $ do
     let reservedWords = [ "let"
                         , "in"
@@ -254,8 +261,7 @@ spec = do
       test1 <- readFile "test/testcases/test1.tig"
       parse test1 `shouldBe`
         Right (
-          Just " an array type and an array variable "
-        , Let [ TypeDec "arrtype" (ArrayOf "int")
+          Let [ TypeDec "arrtype" (ArrayOf "int")
               , VarDec "arr1" (Just "arrtype") (ArrayCreation "arrtype" (IntLiteral 10) (IntLiteral 0))
               ]
               [ LValExp $ Id "arr1" ]
@@ -264,8 +270,7 @@ spec = do
       test7 <- readFile "test/testcases/test7.tig"
       parse test7 `shouldBe`
         Right (
-          Just " define valid mutually recursive functions "
-        , Let [ FnDec "do_nothing1"
+          Let [ FnDec "do_nothing1"
                       [("a", "int"), ("b", "string")]
                       (Just "int")
                       (Sequence [ FunctionCall "do_nothing2"
