@@ -243,7 +243,7 @@ lessThan = const LessThan <$> (spaces >> ((char '<') <*  (notFollowedBy $ char '
 greaterThanOrEqual = const GreaterThanOrEqual <$> (spaces >> (string ">=") <* spaces)
 lessThanOrEqual = const LessThanOrEqual <$> (spaces >> (string "<=") <* spaces)
 equality = const Equality <$> (spaces >> (char '=') <* spaces)
-nonEquality = const NonEquality <$> (spaces >> (string "!=") <* spaces)
+nonEquality = const NonEquality <$> (spaces >> (string "<>") <* spaces)
 boolAnd = const And <$> (spaces >> (char '&') <* spaces)
 boolOr = const Or <$> (spaces >> (char '|') <* spaces)
 
@@ -253,11 +253,11 @@ operatorParser =
     <|> try minus
     <|> try multby
     <|> try divby
+    <|> try equality
+    <|> try nonEquality
     <|> try greaterThan
     <|> try lessThan
     <|> try greaterThanOrEqual
     <|> try lessThanOrEqual
-    <|> try equality
-    <|> try nonEquality
     <|> try boolAnd
     <|> try boolOr

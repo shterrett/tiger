@@ -196,7 +196,7 @@ spec = do
         Parsec.parse binopParser "" "3 >= 5" `shouldBe` Right (BinOp GreaterThanOrEqual (IntLiteral 3) (IntLiteral 5))
         Parsec.parse binopParser "" "3 <= 5" `shouldBe` Right (BinOp LessThanOrEqual (IntLiteral 3) (IntLiteral 5))
         Parsec.parse binopParser "" "3 = 5" `shouldBe` Right (BinOp Equality (IntLiteral 3) (IntLiteral 5))
-        Parsec.parse binopParser "" "3 != 5" `shouldBe` Right (BinOp NonEquality (IntLiteral 3) (IntLiteral 5))
+        Parsec.parse binopParser "" "3 <> 5" `shouldBe` Right (BinOp NonEquality (IntLiteral 3) (IntLiteral 5))
     describe "boolean operations" $ do
       it "parses and and or" $ do
         Parsec.parse binopParser "" "x & y" `shouldBe` Right (BinOp And (LValExp $ Id "x") (LValExp $ Id "y"))
