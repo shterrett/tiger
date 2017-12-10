@@ -59,6 +59,7 @@ binopableParser =
     <|> try ((\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser)
     <|> try (uncurry IfThen <$> ifThenParser)
     <|> try (Grouped <$> groupParser)
+    <|> try (const Nil <$> nilParser)
 
 declarationParser :: Parsec String () Declaration
 declarationParser = try typeDeclarationParser
