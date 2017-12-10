@@ -220,7 +220,7 @@ reservedWordsParser =
                         ]
     in choice $ (\w -> try (string w) <* notFollowedBy (alphaNum <|> char '_')) <$> reservedWords
 
-colon = try $ charToString (char ':' <* spaces)
+colon = try $ charToString (spaces >> char ':' <* spaces)
 semicolon = try $ charToString (spaces >> char ';' <* spaces)
 equals = try $ charToString (spaces >> char '=' <* spaces)
 comma = try $ charToString (spaces >> char ',' <* spaces)
