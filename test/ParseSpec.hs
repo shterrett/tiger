@@ -187,8 +187,8 @@ spec = do
         Parsec.parse binopParser "" "3 * 5" `shouldBe` Right (BinOp Multiplication (IntLiteral 3) (IntLiteral 5))
         Parsec.parse binopParser "" "3 - 5" `shouldBe` Right (BinOp Subtraction (IntLiteral 3) (IntLiteral 5))
         Parsec.parse binopParser "" "3 / 5" `shouldBe` Right (BinOp Division (IntLiteral 3) (IntLiteral 5))
-      it "requires space after the subtraction operator" $ do
-        isLeft (Parsec.parse binopParser "" "3-5") `shouldBe` True
+      it "does not require space after the subtraction operator" $ do
+        Parsec.parse binopParser "" "3-5" `shouldBe` Right (BinOp Subtraction (IntLiteral 3) (IntLiteral 5))
     describe "comparisons" $ do
       it "parses comparison operations" $ do
         Parsec.parse binopParser "" "3 > 5" `shouldBe` Right (BinOp GreaterThan (IntLiteral 3) (IntLiteral 5))

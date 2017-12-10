@@ -235,7 +235,7 @@ charToString :: Parsec String () Char -> Parsec String () String
 charToString = fmap (\c -> [c])
 
 plus = const Addition <$> (spaces >> (char '+') <* spaces)
-minus = const Subtraction <$> (spaces >> (string "- ") <* spaces)
+minus = const Subtraction <$> (spaces >> (char '-') <* spaces)
 multby = const Multiplication <$> (spaces >> (char '*') <* spaces)
 divby = const Division <$> (spaces >> (char '/') <* spaces)
 greaterThan = const GreaterThan <$> (spaces >> ((char '>') <* (notFollowedBy $ char '=')) <* spaces)
