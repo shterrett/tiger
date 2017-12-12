@@ -7,10 +7,9 @@ import Text.Parsec.Char
 import Data.Char (isSpace)
 
 parse :: String -> Either String Expression
-parse s = case Parsec.parse expressionParser "" (prepareProgram s) of
+parse s = case Parsec.parse (spaces >> expressionParser) "" (stripComments s) of
           Right exp -> Right exp
           Left e -> Left $ show e
-    where prepareProgram = stripLeadingWhitespace . stripComments
 
 stripComments :: String -> String
 stripComments = commentStripper Take ""
@@ -20,11 +19,8 @@ commentStripper :: CommentState -> String -> String -> String
 commentStripper _ taken [] = reverse taken
 commentStripper Take taken ('/':'*':rest) = commentStripper Pass taken rest
 commentStripper Take taken (c:rest) = commentStripper Take (c:taken) rest
-commentStripper Pass taken ('*':'/':rest) = commentStripper Take taken rest
-commentStripper Pass taken (c:rest) = commentStripper Pass taken rest
-
-stripLeadingWhitespace :: String -> String
-stripLeadingWhitespace = dropWhile isSpace
+commentStripper Pass taken ('*':'/':rest) = commentStripper Take (' ':' ':taken) rest
+commentStripper Pass taken (c:rest) = commentStripper Pass (' ':taken) rest
 
 expressionParser :: Parsec String () Expression
 expressionParser =
