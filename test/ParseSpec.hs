@@ -148,6 +148,25 @@ spec = do
       Parsec.parse sequenceParser "" "var x := y ; var z := x"
         `shouldBe` Right ([(DecExp $ VarDec "x" Nothing (LValExp $ Id "y")),
                            (DecExp $ VarDec "z" Nothing (LValExp $ Id "x"))])
+    it "parses sequences of array access assignments with embedded arithmetic" $ do
+      Parsec.parse sequenceParser "" "row[r]:=1; diag1[r+c]:=1; diag2[r+7-c]:=1"
+        `shouldBe` Right ([ Assignment (ArraySubscript (Id "row")
+                                                       (LValExp $ Id "r"))
+                                       (IntLiteral 1)
+                          , Assignment (ArraySubscript (Id "diag1")
+                                                       (BinOp Addition
+                                                              (LValExp $ Id "r")
+                                                              (LValExp $ Id "c")))
+                                       (IntLiteral 1)
+                          , Assignment (ArraySubscript (Id "diag2")
+                                                       (BinOp Subtraction
+                                                              (BinOp Addition
+                                                                     (LValExp $ Id "r")
+                                                                     (IntLiteral 7))
+                                                              (LValExp $ Id "c")))
+                                       (IntLiteral 1)
+                         ])
+
   describe "parsing integers" $ do
     it "parses a sequence of integers as a single integer literal" $ do
       Parsec.parse intParser "" "1234" `shouldBe` Right 1234
