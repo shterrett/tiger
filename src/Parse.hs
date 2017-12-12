@@ -36,9 +36,9 @@ expressionParser =
     <|> try (Grouped <$> groupParser)
     <|> try ((uncurry Let) <$> letParser)
     <|> try (Negation <$> negationParser)
-    <|> try (uncurry FunctionCall <$> funcParser)
     <|> try (uncurry Assignment <$> assignmentParser)
     <|> try binopParser
+    <|> try (uncurry FunctionCall <$> funcParser)
     <|> try (uncurry RecordCreation <$> recordCreateParser)
     <|> try (uncurry While <$> whileParser)
     <|> try ((\(var, start, end, exp) -> For var start end exp) <$> forParser)
@@ -126,7 +126,7 @@ binopParser :: Parsec String () Expression
 binopParser = (lookAhead $ try (manyTill intermediateChars (try operatorParser))) >>
               chainl1 binopableParser operator
   where
-    intermediateChars = alphaNum <|> space <|> char '_' <|> char '[' <|> char ']'
+    intermediateChars = alphaNum <|> space <|> char '_' <|> char '[' <|> char ']' <|> char '(' <|> char ')'
     operator = BinOp <$> operatorParser
 
 recordCreateParser :: Parsec String () (Atom, [(Atom, Expression)])
