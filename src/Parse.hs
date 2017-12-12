@@ -126,7 +126,7 @@ binopParser :: Parsec String () Expression
 binopParser = (lookAhead $ try (manyTill intermediateChars (try operatorParser))) >>
               chainl1 binopableParser operator
   where
-    intermediateChars = alphaNum <|> space <|> char '_' <|> char '[' <|> char ']' <|> char '(' <|> char ')'
+    intermediateChars = alphaNum <|> space <|> char '_' <|> char '[' <|> char ']' <|> char '(' <|> char ')' <|> char '.'
     operator = BinOp <$> operatorParser
 
 recordCreateParser :: Parsec String () (Atom, [(Atom, Expression)])
