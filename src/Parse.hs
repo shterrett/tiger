@@ -20,42 +20,43 @@ commentStripper _ taken [] = reverse taken
 commentStripper Take taken ('/':'*':rest) = commentStripper Pass taken rest
 commentStripper Take taken (c:rest) = commentStripper Take (c:taken) rest
 commentStripper Pass taken ('*':'/':rest) = commentStripper Take (' ':' ':taken) rest
+commentStripper Pass taken ('\n':rest) = commentStripper Pass ('\n':taken) rest
 commentStripper Pass taken (c:rest) = commentStripper Pass (' ':taken) rest
 
 expressionParser :: Parsec String () Expression
 expressionParser =
-    try ((\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser)
-    <|> try (uncurry IfThen <$> ifThenParser)
-    <|> try ((\(t, e1, e2) -> ArrayCreation t e1 e2) <$> arrayCreateParser)
-    <|> try (DecExp <$> declarationParser)
-    <|> try (Sequence <$> (between lparen rparen $ sequenceParser))
-    <|> try (Grouped <$> groupParser)
-    <|> try ((uncurry Let) <$> letParser)
-    <|> try (Negation <$> negationParser)
-    <|> try (uncurry Assignment <$> assignmentParser)
+    try ((\sourcePos (ifExp, thenExp, elseExp) -> IfThenElse sourcePos ifExp thenExp elseExp) <$> getPosition <*> ifThenElseParser)
+    <|> try ((uncurry <$> (IfThen <$> getPosition)) <*> ifThenParser)
+    <|> try ((\sourcePos (t, e1, e2) -> ArrayCreation sourcePos t e1 e2) <$> getPosition <*> arrayCreateParser)
+    <|> try (DecExp <$> getPosition <*> declarationParser)
+    <|> try (Sequence <$> getPosition <*> (between lparen rparen $ sequenceParser))
+    <|> try (Grouped <$> getPosition <*> groupParser)
+    <|> try ((uncurry <$> (Let <$> getPosition)) <*> letParser)
+    <|> try (Negation <$> getPosition <*> negationParser)
+    <|> try ((uncurry <$> (Assignment <$> getPosition)) <*> assignmentParser)
     <|> try binopParser
-    <|> try (uncurry FunctionCall <$> funcParser)
-    <|> try (uncurry RecordCreation <$> recordCreateParser)
-    <|> try (uncurry While <$> whileParser)
-    <|> try ((\(var, start, end, exp) -> For var start end exp) <$> forParser)
-    <|> try (LValExp <$> lvalueParser)
-    <|> try (StringLiteral <$> stringParser)
-    <|> try (IntLiteral <$> intParser)
-    <|> try (const Nil <$> nilParser)
-    <|> try (const NoValue <$> noValueParser)
+    <|> try ((uncurry <$> (FunctionCall <$> getPosition)) <*> funcParser)
+    <|> try ((uncurry <$> (RecordCreation <$> getPosition)) <*> recordCreateParser)
+    <|> try ((uncurry <$> (While <$> getPosition)) <*> whileParser)
+    <|> try ((\sourcePos (var, start, end, exp) -> For sourcePos var start end exp) <$> getPosition <*> forParser)
+    <|> try (LValExp <$> getPosition <*> lvalueParser)
+    <|> try (StringLiteral <$> getPosition <*> stringParser)
+    <|> try (IntLiteral <$> getPosition <*> intParser)
+    <|> try (const <$> (Nil <$> getPosition) <*> nilParser)
+    <|> try (const <$> (NoValue <$> getPosition) <*> noValueParser)
 
 binopableParser :: Parsec String () Expression
 binopableParser =
-    try (uncurry FunctionCall <$> funcParser)
-    <|> try (LValExp <$> lvalueParser)
-    <|> try (Sequence <$> (between lparen rparen $ sequenceParser))
-    <|> try (IntLiteral <$> intParser)
-    <|> try (StringLiteral <$> stringParser)
-    <|> try (Negation <$> negationParser)
-    <|> try ((\(ifExp, thenExp, elseExp) -> IfThenElse ifExp thenExp elseExp) <$> ifThenElseParser)
-    <|> try (uncurry IfThen <$> ifThenParser)
-    <|> try (Grouped <$> groupParser)
-    <|> try (const Nil <$> nilParser)
+    try (uncurry <$> (FunctionCall <$> getPosition) <*> funcParser)
+    <|> try (LValExp <$> getPosition <*> lvalueParser)
+    <|> try (Sequence <$> getPosition <*> (between lparen rparen $ sequenceParser))
+    <|> try (IntLiteral <$> getPosition <*> intParser)
+    <|> try (StringLiteral <$> getPosition <*> stringParser)
+    <|> try (Negation <$> getPosition <*> negationParser)
+    <|> try ((\sourcePos (ifExp, thenExp, elseExp) -> IfThenElse sourcePos ifExp thenExp elseExp) <$> getPosition <*> ifThenElseParser)
+    <|> try (uncurry <$> (IfThen <$> getPosition) <*> ifThenParser)
+    <|> try (Grouped <$> getPosition <*> groupParser)
+    <|> try (const <$> (Nil <$> getPosition) <*> nilParser)
 
 declarationParser :: Parsec String () Declaration
 declarationParser = try typeDeclarationParser
@@ -123,7 +124,7 @@ binopParser = (lookAhead $ try (manyTill intermediateChars (try operatorParser))
               chainl1 binopableParser operator
   where
     intermediateChars = alphaNum <|> space <|> char '_' <|> char '[' <|> char ']' <|> char '(' <|> char ')' <|> char '.'
-    operator = BinOp <$> operatorParser
+    operator = BinOp <$> getPosition <*> operatorParser
 
 recordCreateParser :: Parsec String () (Atom, [(Atom, Expression)])
 recordCreateParser = (,) <$> (atomParser <* spaces) <*> (between lbrace rbrace (sepBy fieldPairParser comma))

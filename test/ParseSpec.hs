@@ -5,8 +5,11 @@ import Data.List (isSuffixOf)
 import System.Directory (getDirectoryContents)
 import Test.Hspec
 import qualified Text.Parsec as Parsec (parse, ParseError, Parsec)
+import Text.Parsec.Pos (newPos)
 import Parse
 import TigerTypes
+
+position col = newPos "" 1 col
 
 spec :: Spec
 spec = do
@@ -17,13 +20,13 @@ spec = do
   describe "preparing program" $ do
     it "parses program without caring about comments" $ do
       parse "var /* variable declaration */ x /* named x */:int /* type integer */ := /* equals */ 5 /* five */"
-        `shouldBe` Right (DecExp $ VarDec "x" (Just "int") (IntLiteral 5))
+        `shouldBe` Right (DecExp (position 1) $ VarDec "x" (Just "int") (IntLiteral (position 79) 5))
     it "strips multiline comments" $ do
       parse "var x /* multiline\ncomment */ := 5"
-        `shouldBe` Right (DecExp $ VarDec "x" Nothing (IntLiteral 5))
+        `shouldBe` Right (DecExp (position 1) $ VarDec "x" Nothing (IntLiteral (newPos "" 2 15) 5))
     it "strips leading whitespace left by comments" $ do
       parse "/* hello! */ var /* variable declaration */ x /* named x */:int /* type integer */ := /* equals */ 5 /* five */"
-        `shouldBe` Right (DecExp $ VarDec "x" (Just "int") (IntLiteral 5))
+        `shouldBe` Right (DecExp (position 12) $ VarDec "x" (Just "int") (IntLiteral (position 90) 5))
   describe "reserved words" $ do
     let reservedWords = [ "let"
                         , "in"
@@ -75,18 +78,25 @@ spec = do
     describe "parsing variable declarations" $ do
       it "parses assignment with a type id" $ do
         Parsec.parse declarationParser "" "var x: string := y"
-          `shouldBe` Right (VarDec "x" (Just "string") (LValExp $ Id "y"))
+          `shouldBe` Right (VarDec "x" (Just "string") (LValExp (position 18) $ Id "y"))
         Parsec.parse declarationParser "" "var rec1: rectype1 := rectype2 {name=\"Name\", id=0}"
-          `shouldBe` Right (VarDec "rec1" (Just "rectype1") (RecordCreation "rectype2" [("name", StringLiteral "Name"), ("id", IntLiteral 0)]))
+          `shouldBe` Right (VarDec "rec1"
+                                   (Just "rectype1")
+                                   (RecordCreation (position 23)
+                                                   "rectype2"
+                                                   [ ("name", StringLiteral (position 38) "Name")
+                                                   , ("id", IntLiteral (position 49) 0)
+                                                   ]))
       it "parses assignment without a type id" $ do
-        Parsec.parse declarationParser "" "var x := y" `shouldBe` Right (VarDec "x" Nothing (LValExp $ Id "y"))
+        Parsec.parse declarationParser "" "var x := y"
+          `shouldBe` Right (VarDec "x" Nothing (LValExp (position 10) $ Id "y"))
     describe "parsing function declaration" $ do
       it "parses function declaration with return type" $ do
         Parsec.parse declarationParser "" "function test (x: string) : string = x"
-          `shouldBe` Right (FnDec "test" [("x", "string")] (Just "string") (LValExp $ Id "x"))
+          `shouldBe` Right (FnDec "test" [("x", "string")] (Just "string") (LValExp (position 38) $ Id "x"))
       it "parses function declaration without return type" $ do
         Parsec.parse declarationParser "" "function test (x: string) = x"
-          `shouldBe` Right (FnDec "test" [("x", "string")] Nothing (LValExp $ Id "x"))
+          `shouldBe` Right (FnDec "test" [("x", "string")] Nothing (LValExp (position 29) $ Id "x"))
   describe "parsing LValues" $ do
     describe "parsing identifiers" $ do
       it "accepts a string composed of letters, numbers, and underscores" $ do
@@ -111,24 +121,36 @@ spec = do
           `shouldBe` Right (RecordAccess (RecordAccess (Id "record") "field_1") "field_2")
     describe "parsing array accesses" $ do
       it "uses the square brackets to denote an array access" $ do
-        Parsec.parse lvalueParser "" "arr[x]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[x]"
+          `shouldBe` Right (ArraySubscript (Id "arr")
+                                           (LValExp (position 5) $ Id "x"))
       it "allows arbitrary space within the brackets" $ do
-        Parsec.parse lvalueParser "" "arr[ x]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
-        Parsec.parse lvalueParser "" "arr[x ]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
-        Parsec.parse lvalueParser "" "arr[ x ]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
-        Parsec.parse lvalueParser "" "arr[\nx]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
-        Parsec.parse lvalueParser "" "arr[x\n]" `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[ x]"
+          `shouldBe` Right (ArraySubscript (Id "arr")
+                                           (LValExp (position 6) $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[x ]"
+          `shouldBe` Right (ArraySubscript (Id "arr")
+                                           (LValExp (position 5) $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[ x ]"
+          `shouldBe` Right (ArraySubscript (Id "arr")
+                                           (LValExp (position 6) $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[\nx]"
+          `shouldBe` Right (ArraySubscript (Id "arr")
+                                           (LValExp (newPos "" 2 1) $ Id "x"))
+        Parsec.parse lvalueParser "" "arr[x\n]"
+          `shouldBe` Right (ArraySubscript (Id "arr")
+                                           (LValExp (position 5) $ Id "x"))
       it "does not allow empty brackets" $ do
         isLeft (Parsec.parse lvalueParser "" "array[]") `shouldBe` True
         isLeft (Parsec.parse lvalueParser "" "array[  ]") `shouldBe` True
 
     it "allows combinations" $ do
       Parsec.parse lvalueParser "" "arr[x].field_1"
-        `shouldBe` Right (RecordAccess (ArraySubscript (Id "arr") (LValExp $ Id "x")) "field_1")
+        `shouldBe` Right (RecordAccess (ArraySubscript (Id "arr") (LValExp (position 5) $ Id "x")) "field_1")
       Parsec.parse lvalueParser "" "arr[x.field_1]"
-        `shouldBe` Right (ArraySubscript (Id "arr") (LValExp $ RecordAccess (Id "x") "field_1"))
+        `shouldBe` Right (ArraySubscript (Id "arr") (LValExp (position 5) $ RecordAccess (Id "x") "field_1"))
       Parsec.parse lvalueParser "" "x.field_1[y]"
-        `shouldBe` Right (ArraySubscript (RecordAccess (Id "x") "field_1") (LValExp $ Id "y"))
+        `shouldBe` Right (ArraySubscript (RecordAccess (Id "x") "field_1") (LValExp (position 11) $ Id "y"))
   describe "parsing nil" $ do
     it "parses nil as Nil" $ do
       Parsec.parse nilParser "" "nil" `shouldBe` Right ()
@@ -142,29 +164,35 @@ spec = do
   describe "parsing sequence of expressions" $ do
     it "returns a list of parsed expressions" $ do
       Parsec.parse sequenceParser "" "var x := y; var z := x"
-        `shouldBe` Right ([(DecExp $ VarDec "x" Nothing (LValExp $ Id "y")),
-                           (DecExp $ VarDec "z" Nothing (LValExp $ Id "x"))])
+        `shouldBe` Right ([(DecExp (position 1) $ VarDec "x" Nothing (LValExp (position 10) $ Id "y")),
+                           (DecExp (position 13) $ VarDec "z" Nothing (LValExp (position 22) $ Id "x"))])
     it "allows spaces within the list" $ do
       Parsec.parse sequenceParser "" "var x := y ; var z := x"
-        `shouldBe` Right ([(DecExp $ VarDec "x" Nothing (LValExp $ Id "y")),
-                           (DecExp $ VarDec "z" Nothing (LValExp $ Id "x"))])
+        `shouldBe` Right ([(DecExp (position 1) $ VarDec "x" Nothing (LValExp (position 10) $ Id "y")),
+                           (DecExp (position 14) $ VarDec "z" Nothing (LValExp (position 23) $ Id "x"))])
     it "parses sequences of array access assignments with embedded arithmetic" $ do
       Parsec.parse sequenceParser "" "row[r]:=1; diag1[r+c]:=1; diag2[r+7-c]:=1"
-        `shouldBe` Right ([ Assignment (ArraySubscript (Id "row")
-                                                       (LValExp $ Id "r"))
-                                       (IntLiteral 1)
-                          , Assignment (ArraySubscript (Id "diag1")
-                                                       (BinOp Addition
-                                                              (LValExp $ Id "r")
-                                                              (LValExp $ Id "c")))
-                                       (IntLiteral 1)
-                          , Assignment (ArraySubscript (Id "diag2")
-                                                       (BinOp Subtraction
-                                                              (BinOp Addition
-                                                                     (LValExp $ Id "r")
-                                                                     (IntLiteral 7))
-                                                              (LValExp $ Id "c")))
-                                       (IntLiteral 1)
+        `shouldBe` Right ([ Assignment (position 1)
+                                       (ArraySubscript (Id "row")
+                                                       (LValExp (position 5) $ Id "r"))
+                                       (IntLiteral (position 9) 1)
+                          , Assignment (position 12)
+                                       (ArraySubscript (Id "diag1")
+                                                       (BinOp (position 19)
+                                                              Addition
+                                                              (LValExp (position 18) $ Id "r")
+                                                              (LValExp (position 20) $ Id "c")))
+                                       (IntLiteral (position 24) 1)
+                          , Assignment (position 27)
+                                       (ArraySubscript (Id "diag2")
+                                                       (BinOp (position 36)
+                                                              Subtraction
+                                                              (BinOp (position 34)
+                                                                      Addition
+                                                                     (LValExp (position 33) $ Id "r")
+                                                                     (IntLiteral (position 35) 7))
+                                                              (LValExp (position 37) $ Id "c")))
+                                       (IntLiteral (position 41) 1)
                          ])
 
   describe "parsing integers" $ do
@@ -187,78 +215,159 @@ spec = do
       \ world\"" `shouldBe` Right "hello world"
   describe "negating an expression" $ do
     it "negates integer literals" $ do
-      Parsec.parse negationParser "" "-1234" `shouldBe` Right (IntLiteral 1234)
+      Parsec.parse negationParser "" "-1234" `shouldBe` Right (IntLiteral (position 2) 1234)
     it "negates other expressions" $ do
-      Parsec.parse negationParser "" "-a" `shouldBe` Right (LValExp $ Id "a")
+      Parsec.parse negationParser "" "-a" `shouldBe` Right (LValExp (position 2) $ Id "a")
     it "does not allow space after the hyphen" $ do
       isLeft (Parsec.parse negationParser "" "- a") `shouldBe` True
   describe "function call" $ do
     it "calls a function with its arguments" $ do
       Parsec.parse funcParser "" "map(like, friends)"
-        `shouldBe` Right ("map", [LValExp (Id "like"), LValExp (Id "friends")])
+        `shouldBe` Right ("map", [ LValExp (position 5) (Id "like")
+                                 , LValExp (position 11) (Id "friends")
+                                 ])
     it "calls a function without arguments" $ do
       Parsec.parse funcParser "" "fireTheMissles()"
         `shouldBe` Right ("fireTheMissles", [])
   describe "Binary Operations" $ do
     describe "arithmetic" $ do
       it "parses basic arithmetic" $ do
-        Parsec.parse binopParser "" "3 + 5" `shouldBe` Right (BinOp Addition (IntLiteral 3) (IntLiteral 5))
-        Parsec.parse binopParser "" "3 * 5" `shouldBe` Right (BinOp Multiplication (IntLiteral 3) (IntLiteral 5))
-        Parsec.parse binopParser "" "3 - 5" `shouldBe` Right (BinOp Subtraction (IntLiteral 3) (IntLiteral 5))
-        Parsec.parse binopParser "" "3 / 5" `shouldBe` Right (BinOp Division (IntLiteral 3) (IntLiteral 5))
+        Parsec.parse binopParser "" "3 + 5"
+          `shouldBe` Right (BinOp (position 2)
+                            Addition
+                            (IntLiteral (position 1) 3)
+                            (IntLiteral (position 5) 5))
+        Parsec.parse binopParser "" "3 * 5"
+          `shouldBe` Right (BinOp (position 2)
+                            Multiplication
+                            (IntLiteral (position 1) 3)
+                            (IntLiteral (position 5) 5))
+        Parsec.parse binopParser "" "3 - 5"
+          `shouldBe` Right (BinOp (position 2)
+                            Subtraction
+                            (IntLiteral (position 1) 3)
+                            (IntLiteral (position 5) 5))
+        Parsec.parse binopParser "" "3 / 5"
+          `shouldBe` Right (BinOp (position 2)
+                            Division
+                            (IntLiteral (position 1) 3)
+                            (IntLiteral (position 5) 5))
       it "does not require space after the subtraction operator" $ do
-        Parsec.parse binopParser "" "3-5" `shouldBe` Right (BinOp Subtraction (IntLiteral 3) (IntLiteral 5))
+        Parsec.parse binopParser "" "3-5"
+          `shouldBe` Right (BinOp (position 2)
+                            Subtraction
+                            (IntLiteral (position 1) 3)
+                            (IntLiteral (position 3) 5))
     describe "comparisons" $ do
       it "parses comparison operations" $ do
-        Parsec.parse binopParser "" "3 > 5" `shouldBe` Right (BinOp GreaterThan (IntLiteral 3) (IntLiteral 5))
-        Parsec.parse binopParser "" "3 < 5" `shouldBe` Right (BinOp LessThan (IntLiteral 3) (IntLiteral 5))
-        Parsec.parse binopParser "" "3 >= 5" `shouldBe` Right (BinOp GreaterThanOrEqual (IntLiteral 3) (IntLiteral 5))
-        Parsec.parse binopParser "" "3 <= 5" `shouldBe` Right (BinOp LessThanOrEqual (IntLiteral 3) (IntLiteral 5))
-        Parsec.parse binopParser "" "3 = 5" `shouldBe` Right (BinOp Equality (IntLiteral 3) (IntLiteral 5))
-        Parsec.parse binopParser "" "3 <> 5" `shouldBe` Right (BinOp NonEquality (IntLiteral 3) (IntLiteral 5))
+        Parsec.parse binopParser "" "3 > 5"
+          `shouldBe` Right (BinOp (position 2)
+                            GreaterThan
+                            (IntLiteral (position 1) 3)
+                            (IntLiteral (position 5) 5))
+        Parsec.parse binopParser "" "3 < 5"
+          `shouldBe` Right (BinOp (position 2)
+                            LessThan
+                            (IntLiteral (position 1) 3)
+                            (IntLiteral (position 5) 5))
+        Parsec.parse binopParser "" "3 >= 5"
+          `shouldBe` Right (BinOp (position 2)
+                            GreaterThanOrEqual
+                            (IntLiteral (position 1) 3)
+                            (IntLiteral (position 6) 5))
+        Parsec.parse binopParser "" "3 <= 5"
+          `shouldBe` Right (BinOp (position 2)
+                            LessThanOrEqual
+                            (IntLiteral (position 1) 3)
+                            (IntLiteral (position 6) 5))
+        Parsec.parse binopParser "" "3 = 5"
+          `shouldBe` Right (BinOp (position 2)
+                           Equality
+                           (IntLiteral (position 1) 3)
+                           (IntLiteral (position 5) 5))
+        Parsec.parse binopParser "" "3 <> 5"
+          `shouldBe` Right (BinOp (position 2)
+                            NonEquality
+                            (IntLiteral (position 1) 3)
+                            (IntLiteral (position 6) 5))
     describe "boolean operations" $ do
       it "parses and and or" $ do
-        Parsec.parse binopParser "" "x & y" `shouldBe` Right (BinOp And (LValExp $ Id "x") (LValExp $ Id "y"))
-        Parsec.parse binopParser "" "x | y" `shouldBe` Right (BinOp Or (LValExp $ Id "x") (LValExp $ Id "y"))
+        Parsec.parse binopParser "" "x & y"
+          `shouldBe` Right (BinOp (position 2)
+                            And
+                            (LValExp (position 1) $ Id "x")
+                            (LValExp (position 5) $ Id "y"))
+        Parsec.parse binopParser "" "x | y"
+          `shouldBe` Right (BinOp (position 2)
+                                  Or
+                                  (LValExp (position 1) $ Id "x")
+                                  (LValExp (position 5) $ Id "y"))
     describe "left associative" $ do
       it "parses multiple binary operations" $ do
         Parsec.parse binopParser "" "3 + 5 - 10"
-          `shouldBe` Right (BinOp Subtraction
-                                  (BinOp Addition (IntLiteral 3) (IntLiteral 5))
-                                  (IntLiteral 10))
+          `shouldBe` Right (BinOp (position 6)
+                                  Subtraction
+                                  (BinOp (position 2)
+                                          Addition
+                                          (IntLiteral (position 1) 3)
+                                          (IntLiteral (position 5) 5))
+                                  (IntLiteral (position 9) 10))
     describe "partial match" $ do
       it "does not match an expression without an operator" $ do
         isLeft (Parsec.parse binopParser "" "5") `shouldBe` True
   describe "Record creation" $ do
     it "parses a record and its fields" $ do
       Parsec.parse recordCreateParser "" "Person { name = \"Houdini\", email = \"imakitty@example.com\", age = 3 }"
-        `shouldBe` Right ("Person", [("name", StringLiteral "Houdini"), ("email", StringLiteral "imakitty@example.com"), ("age", IntLiteral 3)])
+        `shouldBe` Right ( "Person"
+                         , [ ("name", StringLiteral (position 17) "Houdini")
+                           , ("email", StringLiteral (position 36) "imakitty@example.com")
+                           , ("age", IntLiteral (position 66) 3)
+                           ]
+                         )
   describe "Array creation" $ do
     it "parses an array creation" $ do
       Parsec.parse arrayCreateParser "" "String [5] of \"hello\""
-        `shouldBe` Right ("String", IntLiteral 5, StringLiteral "hello")
+        `shouldBe` Right ( "String"
+                         , IntLiteral (position 9) 5
+                         , StringLiteral (position 15) "hello"
+                         )
   describe "If Expressions" $ do
     it "parses an if-then-else" $ do
       Parsec.parse ifThenElseParser "" "if a\nthen b\nelse c"
-        `shouldBe` Right (LValExp $ Id "a", LValExp $ Id "b", LValExp $ Id "c")
+        `shouldBe` Right ( LValExp (position 4) $ Id "a"
+                         , LValExp (newPos "" 2 6) $ Id "b"
+                         , LValExp (newPos "" 3 6) $ Id "c"
+                         )
     it "parses an if-then" $ do
       Parsec.parse ifThenParser "" "if a\nthen b"
-        `shouldBe` Right (LValExp $ Id "a", LValExp $ Id "b")
+        `shouldBe` Right ( LValExp (position 4) $ Id "a"
+                         , LValExp (newPos "" 2 6) $ Id "b"
+                         )
   describe "Assignment" $ do
     it "parses := as assignment" $ do
       Parsec.parse assignmentParser "" "x := 5"
-        `shouldBe` Right (Id "x", IntLiteral 5)
+        `shouldBe` Right ( Id "x"
+                         , IntLiteral (position 6) 5
+                         )
   describe "while loops" $ do
     it "parses while ... do ... as a while loope" $ do
       Parsec.parse whileParser "" "while x do y"
-        `shouldBe` Right (LValExp $ Id "x", LValExp $ Id "y")
+        `shouldBe` Right ( LValExp (position 7) $ Id "x"
+                         , LValExp (position 12) $ Id "y"
+                         )
     it "handles newlines" $ do
       Parsec.parse whileParser "" "while x\ndo y"
-        `shouldBe` Right (LValExp $ Id "x", LValExp $ Id "y")
+        `shouldBe` Right ( LValExp (position 7) $ Id "x"
+                         , LValExp (newPos "" 2 4) $ Id "y"
+                         )
   describe "for loops" $ do
     it "parses for ... to ... do ..." $ do
       Parsec.parse forParser "" "for x := 5 to 10 do panic"
-        `shouldBe` Right ("x", IntLiteral 5, IntLiteral 10, LValExp $ Id "panic")
+        `shouldBe` Right ( "x"
+                         , IntLiteral (position 10) 5
+                         , IntLiteral (position 15) 10
+                         , LValExp (position 21) $ Id "panic"
+                         )
   describe "break" $ do
     it "parses break when it stands alone" $ do
       Parsec.parse breakParser "" "break" `shouldBe` Right ()
@@ -269,45 +378,13 @@ spec = do
   describe "let - in" $ do
     it "parses a sequence of assignments and a sequence of expressions" $ do
       Parsec.parse letParser "" "let var x := 5\nin x\nend"
-        `shouldBe` Right ([(VarDec "x" Nothing $  IntLiteral 5)],
-                          [LValExp $ Id "x"])
+        `shouldBe` Right ([(VarDec "x" Nothing $  IntLiteral (position 14) 5)],
+                          [LValExp (newPos "" 2 4) $ Id "x"])
   describe "group parser" $ do
     it "parses an expression surrounded by parentheses" $ do
       Parsec.parse groupParser "" "(3)"
-        `shouldBe` Right (IntLiteral 3)
+        `shouldBe` Right (IntLiteral (position 2) 3)
   describe "expression" $ do
-    it "correctly parses example program 1" $ do
-      test1 <- readFile "test/testcases/test1.tig"
-      parse test1 `shouldBe`
-        Right (
-          Let [ TypeDec "arrtype" (ArrayOf "int")
-              , VarDec "arr1" (Just "arrtype") (ArrayCreation "arrtype" (IntLiteral 10) (IntLiteral 0))
-              ]
-              [ LValExp $ Id "arr1" ]
-        )
-    it "correctly parses example program 7" $ do
-      test7 <- readFile "test/testcases/test7.tig"
-      parse test7 `shouldBe`
-        Right (
-          Let [ FnDec "do_nothing1"
-                      [("a", "int"), ("b", "string")]
-                      (Just "int")
-                      (Sequence [ FunctionCall "do_nothing2"
-                                               [BinOp Addition (LValExp $ Id "a") (IntLiteral 1)]
-                                , IntLiteral 0
-                                ])
-              , FnDec "do_nothing2"
-                      [("d", "int")]
-                      (Just "string")
-                      (Sequence [ FunctionCall "do_nothing1"
-                                               [ LValExp $ Id "d"
-                                               , StringLiteral "str"
-                                               ]
-                                , StringLiteral " "
-                                ])
-              ]
-              [FunctionCall "do_nothing1" [IntLiteral 0, StringLiteral "str2"]]
-        )
     it "parses all the things" $ do
       let syntaxErrors = ["test49.tig"]
       names <- filter (flip notElem $ syntaxErrors) <$>

@@ -1,5 +1,7 @@
 module TigerTypes where
 
+import Text.Parsec.Pos (SourcePos)
+
 type Atom = String
 type TypeName = String
 type DeclarationList = [Declaration]
@@ -20,27 +22,27 @@ data LValue =
     | ArraySubscript LValue Expression
     deriving (Show, Eq)
 data Expression =
-    LValExp LValue
-    | DecExp Declaration
-    | ValuelessExpression Expression
-    | Nil
-    | Sequence [Expression]
-    | NoValue
-    | IntLiteral Integer
-    | StringLiteral String
-    | Negation Expression
-    | FunctionCall Atom [Expression]
-    | BinOp Operator Expression Expression
-    | RecordCreation TypeName [(Atom, Expression)]
-    | ArrayCreation TypeName Expression Expression
-    | Assignment LValue Expression
-    | IfThenElse Expression Expression Expression
-    | IfThen Expression Expression
-    | While Expression Expression
-    | For Atom Expression Expression Expression
-    | Break
-    | Let DeclarationList [Expression]
-    | Grouped Expression
+    LValExp SourcePos LValue
+    | DecExp SourcePos Declaration
+    | ValuelessExpression SourcePos Expression
+    | Nil SourcePos
+    | Sequence SourcePos [Expression]
+    | NoValue SourcePos
+    | IntLiteral SourcePos Integer
+    | StringLiteral SourcePos String
+    | Negation SourcePos Expression
+    | FunctionCall SourcePos Atom [Expression]
+    | BinOp SourcePos Operator Expression Expression
+    | RecordCreation SourcePos TypeName [(Atom, Expression)]
+    | ArrayCreation SourcePos TypeName Expression Expression
+    | Assignment SourcePos LValue Expression
+    | IfThenElse SourcePos Expression Expression Expression
+    | IfThen SourcePos Expression Expression
+    | While SourcePos Expression Expression
+    | For SourcePos Atom Expression Expression Expression
+    | Break SourcePos
+    | Let SourcePos DeclarationList [Expression]
+    | Grouped SourcePos Expression
     deriving (Show, Eq)
 data Operator =
     Addition
