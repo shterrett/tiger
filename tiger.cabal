@@ -19,6 +19,7 @@ library
                      , Straightline
                      , TigerTypes
                      , Parse
+                     , Symbol
   build-depends:       base >= 4.7 && < 5
                      , parsec
                      , containers >= 0.5.0
@@ -39,9 +40,11 @@ test-suite tiger-test
   main-is:             Spec.hs
   other-modules:       StraightlineSpec
                      , ParseSpec
+                     , SymbolSpec
   build-depends:       base
                      , tiger
                      , hspec
+                     , QuickCheck
                      , containers >= 0.5.0
                      , parsec
                      , directory
