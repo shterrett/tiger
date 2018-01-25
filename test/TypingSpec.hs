@@ -5,7 +5,7 @@ import Data.List (nub)
 import qualified Environment as Env
 import qualified Symbol as Sym
 import TigerTypes (Expression(..), Operator(..))
-import Text.Parsec.Pos (initialPos)
+import Text.Parsec.Pos (initialPos, newPos)
 import Typing
 
 spec = do
@@ -136,3 +136,84 @@ spec = do
                                                  (StringLiteral dummyPos "hello"))
           (nub $ typ <$> operators)
             `shouldBe` [(emptyEnv, Left $ typeError dummyPos [TigerInt] $ Right Typing.Nil)]
+    describe "typeCheck Grouped" $ do
+      it "types as the type of the grouped expression" $ do
+        typeCheck emptyEnv (Grouped dummyPos (IntLiteral dummyPos 5))
+          `shouldBe` (emptyEnv, Right TigerInt)
+      it "passes through an error" $ do
+        typeCheck emptyEnv (Grouped dummyPos
+                                    (BinOp dummyPos
+                                           Addition
+                                           (StringLiteral dummyPos "hi")
+                                           (IntLiteral dummyPos 5)))
+          `shouldBe` (emptyEnv, Left $ typeError dummyPos [TigerInt] (Right TigerStr))
+    describe "typeCheck Sequence" $ do
+      it "types as Unit for an empty list" $ do
+        typeCheck emptyEnv (Sequence dummyPos []) `shouldBe` (emptyEnv, Right Unit)
+      it "type checks as the type of the last expression" $ do
+        typeCheck emptyEnv (Sequence dummyPos
+                                     [ IntLiteral dummyPos 5
+                                     , StringLiteral dummyPos "hi"
+                                     ])
+          `shouldBe` (emptyEnv, Right TigerStr)
+      it "passes through an error" $ do
+        typeCheck emptyEnv (Sequence dummyPos
+                                     [ IntLiteral dummyPos 5
+                                     , (BinOp dummyPos
+                                              Addition
+                                              (StringLiteral dummyPos "hi")
+                                              (IntLiteral dummyPos 5))
+                                     ])
+          `shouldBe` (emptyEnv, Left $ typeError dummyPos [TigerInt] (Right TigerStr))
+      it "propogates an error early in the sequence" $ do
+        typeCheck emptyEnv (Sequence dummyPos
+                                     [ (BinOp dummyPos
+                                              Addition
+                                              (StringLiteral dummyPos "hi")
+                                              (IntLiteral dummyPos 5))
+                                     , IntLiteral dummyPos 5
+                                     ])
+          `shouldBe` (emptyEnv, Left $ typeError dummyPos [TigerInt] (Right TigerStr))
+    describe "typeCheck ArrayCreation" $ do
+      let (words, table) = Sym.put "words" $ Sym.newTable 0
+      let env = ( table
+                , Env.fromList [(words, Name $ Just (Array TigerStr))]
+                )
+      let lenPos = newPos "" 1 5
+      let iniPos = newPos "" 1 10
+      it ("type checks as the stated array type when it is declared properly, " ++
+         "the first expression typechecks to a TigerInt, " ++
+         "and the second has the same type as the declared type") $ do
+        typeCheck env (ArrayCreation dummyPos
+                                     "words"
+                                     (IntLiteral lenPos 5)
+                                     (StringLiteral iniPos ""))
+          `shouldBe` (env, Right $ Array TigerStr)
+      it "returns an error if the first expression is not an int" $ do
+        typeCheck env (ArrayCreation dummyPos
+                                     "words"
+                                     (StringLiteral lenPos "hi")
+                                     (StringLiteral iniPos ""))
+          `shouldBe` (env, Left $ typeError lenPos [TigerInt] (Right TigerStr))
+      it "returns an error if the second expression does not match the declared type" $ do
+        typeCheck env (ArrayCreation dummyPos
+                                     "words"
+                                     (IntLiteral lenPos 5)
+                                     (IntLiteral iniPos 0))
+          `shouldBe` (env, Left $ typeError iniPos [TigerInt] (Right TigerStr))
+      it "returns an error if the stated type is not an array type" $ do
+        let (number, table') = Sym.put "number" table
+        let env' = ( table'
+                   , Env.addBinding (number, (Name $ Just TigerInt)) (snd env)
+                   )
+        typeCheck env' (ArrayCreation dummyPos
+                                      "number"
+                                      (IntLiteral lenPos 5)
+                                      (IntLiteral iniPos 0))
+          `shouldBe` (env', Left $ typeError dummyPos [TigerInt] (Right $ Array TigerInt))
+      it "returns an error if the stated type is not declared" $ do
+        typeCheck env (ArrayCreation dummyPos
+                                     "number"
+                                     (IntLiteral lenPos 5)
+                                     (IntLiteral iniPos 0))
+          `shouldBe` (env, Left $ undeclaredType dummyPos "number")
