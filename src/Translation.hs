@@ -5,5 +5,7 @@ import TigerTypes (Expression)
 
 type IL = ()
 
-translate :: Env.ValEnv -> Expression -> IL
+type ValEnv = Env.Environment Expression
+
+translate :: ValEnv -> Expression -> IL
 translate _ _ = ()

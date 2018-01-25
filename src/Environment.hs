@@ -3,11 +3,8 @@ module Environment where
 import qualified Data.Map.Strict as Map
 import Symbol (Symbol)
 import TigerTypes (Expression)
-import Typing (ProgramType)
 
 type Environment a = [Map.Map Symbol a]
-type ValEnv = Environment Expression
-type TypeEnv = Environment ProgramType
 
 fromList :: [(Symbol, a)] -> Environment a
 fromList = pure . Map.fromList

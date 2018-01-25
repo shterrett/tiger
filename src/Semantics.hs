@@ -2,11 +2,11 @@ module Semantics where
 
 import qualified Environment as Env
 import qualified Symbol as Sym
-import Typing (ProgramType)
-import Translation (IL)
+import Typing (TypeEnv, ProgramType)
+import Translation (ValEnv, IL)
 
-data TotalEnv = TotalEnv { tEnv :: Env.TypeEnv
-                         , vEnv :: Env.ValEnv
+data TotalEnv = TotalEnv { tEnv :: TypeEnv
+                         , vEnv :: ValEnv
                          , sym :: Sym.SymbolTable
                          }
 
