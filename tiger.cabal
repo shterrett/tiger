@@ -21,6 +21,9 @@ library
                      , Parse
                      , Symbol
                      , Environment
+                     , Semantics
+                     , Typing
+                     , Translation
   build-depends:       base >= 4.7 && < 5
                      , parsec
                      , containers >= 0.5.0
