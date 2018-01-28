@@ -1,6 +1,7 @@
 module Typing where
 
 import Text.Parsec.Pos (SourcePos)
+import Control.Monad (foldM)
 import Data.List (intersperse, foldr1, foldl')
 import Data.Either (isLeft)
 import TigerTypes (Expression(..), Operator(..), TypeFields, TypeName)
@@ -61,15 +62,8 @@ typeCheck e (BinOp pos op exp1 exp2)
         ((Right (_, TigerStr)), mismatch) -> Left $ typeError pos [TigerStr] mismatch
         (mismatch, _) -> Left $ typeError pos [TigerInt, TigerStr] mismatch
 typeCheck e (Grouped _ exp) = typeCheck e exp
-typeCheck e (Sequence _ []) = Right (e, Unit)
-typeCheck e (Sequence _ exps) = foldl' checkSeqElem (Right (e, Unit)) exps
+typeCheck e (Sequence pos exps) = foldM (\(e', _) exp -> typeCheck e' exp) (e, Unit) exps
 typeCheck e (ArrayCreation pos name exp1 exp2) = checkArray e pos name exp1 exp2
-
-checkSeqElem :: Either TypeError (TypeEnv, ProgramType) ->
-                Expression ->
-                Either TypeError (TypeEnv, ProgramType)
-checkSeqElem (Right (ev, typ)) exp = typeCheck ev exp
-checkSeqElem result _ = result
 
 checkArray :: TypeEnv ->
               SourcePos ->
