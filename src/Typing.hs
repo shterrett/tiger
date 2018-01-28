@@ -4,7 +4,7 @@ import Text.Parsec.Pos (SourcePos)
 import Control.Monad (foldM)
 import Data.List (intersperse, foldr1, foldl')
 import Data.Either (isLeft)
-import TigerTypes (Expression(..), Operator(..), TypeFields, TypeName)
+import TigerTypes (Expression(..), Operator(..), TypeFields, TypeName, position)
 import qualified Symbol as Sym
 import qualified Environment as Env
 
@@ -72,25 +72,26 @@ checkArray :: TypeEnv ->
               Expression ->
               Either TypeError (TypeEnv, ProgramType)
 checkArray env pos name lengthExp initExp =
-    foldl' (flip ($))
-           (lookupType env name pos)
-           [checkArray, checkLengthExp, checkScalarExp]
-    where checkArray success@(Right _) = success
-          checkArray mismatch = Left $ typeError pos [Array Unit] mismatch
-          checkLengthExp (Right (ev, arrType)) = case typeCheck ev lengthExp of
-                                           (Right (ev', TigerInt)) -> Right (ev', arrType)
-                                           mismatch -> Left $ typeError pos [TigerInt] mismatch
-          checkScalarExp typ@(Right (ev, arrType@((Name _ (Just (Array expected)))))) = case typeCheck ev initExp of
-                                           scalarResult@(Right (ev', scalarType)) -> if expected == scalarType
-                                                                        then typ
-                                                                        else Left $ typeError pos [expected] scalarResult
-                                           mismatch -> Left $ typeError pos [expected] mismatch
+    (lookupType env name pos) >>= checkArrayType >>= checkLengthExp >>= checkScalarExp
+    where checkArrayType typ@(_, Name _ (Just (Array _))) = Right typ
+          checkArrayType mismatch = Left $ typeError pos [Array Unit] (Right mismatch)
+          checkLengthExp (ev, arrType) =
+            case typeCheck ev lengthExp of
+              (Right (ev', TigerInt)) -> Right (ev', arrType)
+              mismatch -> Left $ typeError (position lengthExp) [TigerInt] mismatch
+          checkScalarExp typ@(ev, arrType@((Name _ (Just (Array expected))))) =
+            case typeCheck ev initExp of
+              scalarResult@(Right (ev', scalarType)) -> if expected == scalarType
+                                                          then Right typ
+                                                          else Left $ typeError (position initExp) [expected] scalarResult
+              mismatch -> Left $ typeError pos [expected] mismatch
+
 lookupType :: TypeEnv ->
               TypeName ->
               SourcePos ->
               Either TypeError (TypeEnv, ProgramType)
 lookupType env@(table, ev) name pos =
-    (,) env <$> (maybeToEither (Sym.get name table >>= (lookup ev))
+    (maybeToEither ((,) env <$> (Sym.get name table >>= (lookup ev)))
                               (undeclaredType pos name))
     where lookup = flip Env.lookup
           maybeToEither Nothing e = Left e

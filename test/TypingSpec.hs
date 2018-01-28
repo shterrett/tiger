@@ -189,31 +189,31 @@ spec = do
                                      (IntLiteral lenPos 5)
                                      (StringLiteral iniPos ""))
           `shouldBe` Right (env, Name words (Just $ Array TigerStr))
-    --   it "returns an error if the first expression is not an int" $ do
-    --     typeCheck env (ArrayCreation dummyPos
-    --                                  "words"
-    --                                  (StringLiteral lenPos "hi")
-    --                                  (StringLiteral iniPos ""))
-    --       `shouldBe` (env, Left $ typeError lenPos [TigerInt] (Right TigerStr))
-    --   it "returns an error if the second expression does not match the declared type" $ do
-    --     typeCheck env (ArrayCreation dummyPos
-    --                                  "words"
-    --                                  (IntLiteral lenPos 5)
-    --                                  (IntLiteral iniPos 0))
-    --       `shouldBe` (env, Left $ typeError iniPos [TigerInt] (Right TigerStr))
-    --   it "returns an error if the stated type is not an array type" $ do
-    --     let (number, table') = Sym.put "number" table
-    --     let env' = ( table'
-    --                , Env.addBinding (number, (Name $ Just TigerInt)) (snd env)
-    --                )
-    --     typeCheck env' (ArrayCreation dummyPos
-    --                                   "number"
-    --                                   (IntLiteral lenPos 5)
-    --                                   (IntLiteral iniPos 0))
-    --       `shouldBe` (env', Left $ typeError dummyPos [TigerInt] (Right $ Array TigerInt))
-    --   it "returns an error if the stated type is not declared" $ do
-    --     typeCheck env (ArrayCreation dummyPos
-    --                                  "number"
-    --                                  (IntLiteral lenPos 5)
-    --                                  (IntLiteral iniPos 0))
-    --       `shouldBe` (env, Left $ undeclaredType dummyPos "number")
+      it "returns an error if the first expression is not an int" $ do
+        typeCheck env (ArrayCreation dummyPos
+                                     "words"
+                                     (StringLiteral lenPos "hi")
+                                     (StringLiteral iniPos ""))
+          `shouldBe` Left (typeError lenPos [TigerInt] (Right (env, TigerStr)))
+      it "returns an error if the second expression does not match the declared type" $ do
+        typeCheck env (ArrayCreation dummyPos
+                                     "words"
+                                     (IntLiteral lenPos 5)
+                                     (IntLiteral iniPos 0))
+          `shouldBe` Left (typeError iniPos [TigerStr] (Right (env, TigerInt)))
+      it "returns an error if the stated type is not an array type" $ do
+        let (number, table') = Sym.put "number" table
+        let env' = ( table'
+                   , Env.addBinding (number, (Name number $ Just TigerInt)) (snd env)
+                   )
+        typeCheck env' (ArrayCreation dummyPos
+                                      "number"
+                                      (IntLiteral lenPos 5)
+                                      (IntLiteral iniPos 0))
+          `shouldBe` Left (typeError dummyPos [Array Unit] (Right (env, (Name number $ Just TigerInt))))
+      it "returns an error if the stated type is not declared" $ do
+        typeCheck env (ArrayCreation dummyPos
+                                     "number"
+                                     (IntLiteral lenPos 5)
+                                     (IntLiteral iniPos 0))
+          `shouldBe` Left (undeclaredType dummyPos "number")

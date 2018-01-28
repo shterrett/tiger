@@ -58,3 +58,26 @@ data Operator =
     | And
     | Or
     deriving (Show, Eq)
+
+position :: Expression -> SourcePos
+position (LValExp pos _) = pos
+position (DecExp pos _) = pos
+position (ValuelessExpression pos _) = pos
+position (Nil pos) = pos
+position (Sequence pos _) = pos
+position (NoValue pos) = pos
+position (IntLiteral pos _) = pos
+position (StringLiteral pos _) = pos
+position (Negation pos _) = pos
+position (FunctionCall pos _ _) = pos
+position (BinOp pos _ _ _) = pos
+position (RecordCreation pos _ _) = pos
+position (ArrayCreation pos _ _ _) = pos
+position (Assignment pos _ _) = pos
+position (IfThenElse pos _ _ _) = pos
+position (IfThen pos _ _) = pos
+position (While pos _ _) = pos
+position (For pos _ _ _ _) = pos
+position (Break pos) = pos
+position (Let pos _ _) = pos
+position (Grouped pos _) = pos

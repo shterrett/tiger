@@ -7,7 +7,7 @@ import Test.Hspec
 import qualified Text.Parsec as Parsec (parse, ParseError, Parsec)
 import Text.Parsec.Pos (newPos)
 import Parse
-import TigerTypes
+import TigerTypes hiding (position)
 
 position col = newPos "" 1 col
 
