@@ -33,73 +33,71 @@ instance Eq ProgramType where
     (==) (Name n _) (Name m _) = n == m
     (==) _ _ = False
 
-type TypeEnv = Env.Environment ProgramType
+type TypeEnv = (Sym.SymbolTable, Env.Environment ProgramType)
 type TypeError = String
 
-typeCheck :: (Sym.SymbolTable, TypeEnv) -> Expression -> ((Sym.SymbolTable, TypeEnv), Either TypeError ProgramType)
-typeCheck e (TigerTypes.Nil _) = (e, Right Typing.Nil)
-typeCheck e (ValuelessExpression _ _) = (e, Right Unit)
-typeCheck e (NoValue _) = (e, Right Unit)
-typeCheck e (IntLiteral _ _) = (e, Right TigerInt)
-typeCheck e (StringLiteral _ _) = (e, Right TigerStr)
+typeCheck :: TypeEnv -> Expression -> Either TypeError (TypeEnv, ProgramType)
+typeCheck e (TigerTypes.Nil _) = Right (e, Typing.Nil)
+typeCheck e (ValuelessExpression _ _) = Right (e, Unit)
+typeCheck e (NoValue _) = Right (e, Unit)
+typeCheck e (IntLiteral _ _) = Right (e, TigerInt)
+typeCheck e (StringLiteral _ _) = Right (e, TigerStr)
 typeCheck e (Negation pos exp) =
     case typeCheck e exp of
-      (_, Right TigerInt) -> (e, Right TigerInt)
-      (_, mismatch) -> (e, Left $ typeError pos [TigerInt] mismatch)
+      success@(Right (_, TigerInt)) -> success
+      mismatch -> Left $ typeError pos [TigerInt] mismatch
 typeCheck e (BinOp pos op exp1 exp2)
     | op `elem` [Addition, Subtraction, Multiplication, Division, And, Or] =
       case (typeCheck e exp1, typeCheck e exp2) of
-        ((_, Right TigerInt), (_, Right TigerInt)) -> (e, Right TigerInt)
-        ((_, mismatch), (_, Right TigerInt)) -> (e, Left $ typeError pos [TigerInt] mismatch)
-        ((_, Right TigerInt), (_, mismatch)) -> (e, Left $ typeError pos [TigerInt] mismatch)
-        ((_, mismatch), (_, _)) -> (e, Left $ typeError pos [TigerInt] mismatch)
+        ((Right (_, TigerInt)), (Right (_, TigerInt))) -> Right (e, TigerInt)
+        (mismatch, (Right (_, TigerInt))) -> Left $ typeError pos [TigerInt] mismatch
+        ((Right (_, TigerInt)), mismatch) -> Left $ typeError pos [TigerInt] mismatch
+        (mismatch, _) -> Left $ typeError pos [TigerInt] mismatch
     | op `elem` [Equality, NonEquality, LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual] =
       case (typeCheck e exp1, typeCheck e exp2) of
-        ((_, Right TigerInt), (_, Right TigerInt)) -> (e, Right TigerInt)
-        ((_, Right TigerStr), (_, Right TigerStr)) -> (e, Right TigerInt)
-        ((_, Right TigerInt), (_, mismatch)) -> (e, Left $ typeError pos [TigerInt] mismatch)
-        ((_, Right TigerStr), (_, mismatch)) -> (e, Left $ typeError pos [TigerStr] mismatch)
-        ((_, mismatch), (_, _)) -> (e, Left $ typeError pos [TigerInt, TigerStr] mismatch)
+        ((Right (_, TigerInt)), (Right (_, TigerInt))) -> Right (e, TigerInt)
+        ((Right (_, TigerStr)), (Right (_, TigerStr))) -> Right (e, TigerInt)
+        ((Right (_, TigerInt)), mismatch) -> Left $ typeError pos [TigerInt] mismatch
+        ((Right (_, TigerStr)), mismatch) -> Left $ typeError pos [TigerStr] mismatch
+        (mismatch, _) -> Left $ typeError pos [TigerInt, TigerStr] mismatch
 typeCheck e (Grouped _ exp) = typeCheck e exp
-typeCheck e (Sequence _ []) = (e, Right Unit)
-typeCheck e (Sequence _ exps) = foldl' checkSeqElem (e, Right Unit) exps
+typeCheck e (Sequence _ []) = Right (e, Unit)
+typeCheck e (Sequence _ exps) = foldl' checkSeqElem (Right (e, Unit)) exps
 typeCheck e (ArrayCreation pos name exp1 exp2) = checkArray e pos name exp1 exp2
 
-checkSeqElem :: ((Sym.SymbolTable, TypeEnv), Either TypeError ProgramType) ->
+checkSeqElem :: Either TypeError (TypeEnv, ProgramType) ->
                 Expression ->
-                ((Sym.SymbolTable, TypeEnv), Either TypeError ProgramType)
-checkSeqElem (ev, Right typ) exp = typeCheck ev exp
+                Either TypeError (TypeEnv, ProgramType)
+checkSeqElem (Right (ev, typ)) exp = typeCheck ev exp
 checkSeqElem result _ = result
 
-checkArray :: (Sym.SymbolTable, TypeEnv) ->
+checkArray :: TypeEnv ->
               SourcePos ->
               TypeName ->
               Expression ->
               Expression ->
-              ((Sym.SymbolTable, TypeEnv), Either TypeError ProgramType)
+              Either TypeError (TypeEnv, ProgramType)
 checkArray env pos name lengthExp initExp =
     foldl' (flip ($))
            (lookupType env name pos)
            [checkArray, checkLengthExp, checkScalarExp]
-    where checkArray (ev, arrType@(Right ( Name _ (Just (Array expected))))) = (ev, arrType)
-          checkArray (ev, mismatch) = (ev, Left $ typeError pos [Array Unit] mismatch)
-          checkLengthExp (ev, arrType) = case typeCheck ev lengthExp of
-                                           (ev', Right TigerInt) -> (ev', arrType)
-                                           (ev', mismatch) -> (ev', Left $ typeError pos [TigerInt] mismatch)
-          checkScalarExp (ev, arrType@(Right (Name _ (Just (Array expected))))) = case typeCheck ev initExp of
-                                           (ev', Right scalarType) -> if expected == scalarType
-                                                                        then (ev', arrType)
-                                                                        else (ev', Left $ typeError pos [expected] (Right scalarType))
-                                           (ev', mismatch) -> (ev', Left $ typeError pos [expected] mismatch)
-lookupType :: (Sym.SymbolTable, TypeEnv) ->
+    where checkArray success@(Right _) = success
+          checkArray mismatch = Left $ typeError pos [Array Unit] mismatch
+          checkLengthExp (Right (ev, arrType)) = case typeCheck ev lengthExp of
+                                           (Right (ev', TigerInt)) -> Right (ev', arrType)
+                                           mismatch -> Left $ typeError pos [TigerInt] mismatch
+          checkScalarExp typ@(Right (ev, arrType@((Name _ (Just (Array expected)))))) = case typeCheck ev initExp of
+                                           scalarResult@(Right (ev', scalarType)) -> if expected == scalarType
+                                                                        then typ
+                                                                        else Left $ typeError pos [expected] scalarResult
+                                           mismatch -> Left $ typeError pos [expected] mismatch
+lookupType :: TypeEnv ->
               TypeName ->
               SourcePos ->
-              ((Sym.SymbolTable, TypeEnv), Either TypeError ProgramType)
+              Either TypeError (TypeEnv, ProgramType)
 lookupType env@(table, ev) name pos =
-    ( env
-    , (maybeToEither (Sym.get name table >>= (lookup ev))
-                     (undeclaredType pos name))
-    )
+    (,) env <$> (maybeToEither (Sym.get name table >>= (lookup ev))
+                              (undeclaredType pos name))
     where lookup = flip Env.lookup
           maybeToEither Nothing e = Left e
           maybeToEither (Just t) _ = Right t
@@ -108,8 +106,8 @@ undeclaredType :: SourcePos -> TypeName -> TypeError
 undeclaredType pos name =
     "Type Error! Undeclared Type " ++ name ++ " at" ++ show pos
 
-typeError :: SourcePos -> [ProgramType] -> Either TypeError ProgramType -> TypeError
-typeError pos expected (Right actual) =
+typeError :: SourcePos -> [ProgramType] -> Either TypeError (TypeEnv, ProgramType) -> TypeError
+typeError pos expected (Right (_, actual)) =
     "Type Error! Expected " ++
     (mconcat $ intersperse " or " (show <$> expected)) ++
     " but got " ++

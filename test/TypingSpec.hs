@@ -10,41 +10,41 @@ import Typing
 
 spec = do
     let emptyEnv = ( Sym.newTable 0
-                   , Env.fromList [] :: TypeEnv
-                   )
+                   , Env.fromList []
+                   ) :: TypeEnv
     let dummyPos = initialPos ""
     describe "typeError" $ do
       it "formats an error message for a type mismatch" $ do
-        typeError dummyPos [TigerInt] (Right TigerStr)
+        typeError dummyPos [TigerInt] (Right (emptyEnv, TigerStr))
           `shouldBe` "Type Error! Expected Integer but got String at " ++ show dummyPos
       it "formats an error message with multiple accepted types" $ do
-        typeError dummyPos [TigerInt, TigerStr] (Right Typing.Nil)
+        typeError dummyPos [TigerInt, TigerStr] (Right (emptyEnv, Typing.Nil))
           `shouldBe` "Type Error! Expected Integer or String but got nil at " ++ show dummyPos
       it "passes through an error message that was encountered lower down" $ do
         typeError dummyPos [TigerInt] (Left "whoops!") `shouldBe` "whoops!"
     describe "typeCheck Nil" $ do
       it "types as Nil" $ do
-        typeCheck emptyEnv (TigerTypes.Nil dummyPos) `shouldBe` (emptyEnv, Right Typing.Nil)
+        typeCheck emptyEnv (TigerTypes.Nil dummyPos) `shouldBe` Right (emptyEnv, Typing.Nil)
     describe "typeCheck Valueless" $ do
       it "types as Unit" $ do
         typeCheck emptyEnv (ValuelessExpression dummyPos (NoValue dummyPos))
-          `shouldBe` (emptyEnv, Right Unit)
+          `shouldBe` Right (emptyEnv, Unit)
     describe "typeCheck NoValue" $ do
       it "types as Unit" $ do
-        typeCheck emptyEnv (NoValue dummyPos) `shouldBe` (emptyEnv, Right Unit)
+        typeCheck emptyEnv (NoValue dummyPos) `shouldBe` Right (emptyEnv, Unit)
     describe "typeCheck IntLiteral" $ do
       it "types as TigerInt" $ do
-        typeCheck emptyEnv (IntLiteral dummyPos 5) `shouldBe` (emptyEnv, Right TigerInt)
+        typeCheck emptyEnv (IntLiteral dummyPos 5) `shouldBe` Right (emptyEnv, TigerInt)
     describe "typeCheck StringLiteral" $ do
       it "types as TigerStr" $ do
-        typeCheck emptyEnv (StringLiteral dummyPos "hello") `shouldBe` (emptyEnv, Right TigerStr)
+        typeCheck emptyEnv (StringLiteral dummyPos "hello") `shouldBe` Right (emptyEnv, TigerStr)
     describe "typeCheck Negation" $ do
       it "types as TigerInt when the inner expression is an Int" $ do
         typeCheck emptyEnv (Negation dummyPos (IntLiteral dummyPos 5))
-          `shouldBe` (emptyEnv, Right TigerInt)
+          `shouldBe` Right (emptyEnv, TigerInt)
       it "returns a mismatch error when the inner expression is not an int" $ do
         typeCheck emptyEnv (Negation dummyPos (StringLiteral dummyPos "hello"))
-          `shouldBe` (emptyEnv, Left $ typeError dummyPos [TigerInt] (Right TigerStr))
+          `shouldBe` Left (typeError dummyPos [TigerInt] (Right (emptyEnv, TigerStr)))
     describe "typeCheck BinOp" $ do
       describe "arithmetic" $ do
         let operators = [Addition, Subtraction, Multiplication, Division]
@@ -54,28 +54,28 @@ spec = do
                                                  (IntLiteral dummyPos 5)
                                                  (IntLiteral dummyPos 3))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Right TigerInt)]
+            `shouldBe` [Right (emptyEnv, TigerInt)]
         it "returns a mismatch error when the left expression is not an int" $ do
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
                                                  (StringLiteral dummyPos "hello")
                                                  (IntLiteral dummyPos 3))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Left $ typeError dummyPos [TigerInt] $ Right TigerStr)]
+            `shouldBe` [Left $ (typeError dummyPos [TigerInt] $ Right (emptyEnv ,TigerStr))]
         it "returns a mismatch error when the right expression is not an int" $ do
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
                                                  (IntLiteral dummyPos 3)
                                                  (StringLiteral dummyPos "hello"))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Left $ typeError dummyPos [TigerInt] $ Right TigerStr)]
+            `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, TigerStr)]
         it "returns a mismatch error for the left expression when the both are not ints" $ do
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
                                                  (TigerTypes.Nil dummyPos)
                                                  (StringLiteral dummyPos "hello"))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Left $ typeError dummyPos [TigerInt] $ Right Typing.Nil)]
+            `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, Typing.Nil)]
       describe "comparison" $ do
         let operators = [Equality, NonEquality, LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual]
         it "types as TigerInt when all arguments are TigerInt" $ do
@@ -84,28 +84,28 @@ spec = do
                                                  (IntLiteral dummyPos 5)
                                                  (IntLiteral dummyPos 3))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Right TigerInt)]
+            `shouldBe` [Right (emptyEnv, TigerInt)]
         it "types as TigerInt when all arguments are TigerStr" $ do
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
                                                  (StringLiteral dummyPos "hi")
                                                  (StringLiteral dummyPos "bye"))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Right TigerInt)]
+            `shouldBe` [Right (emptyEnv, TigerInt)]
         it "returns a mismatch error favoring the left type when the types do not match" $ do
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
                                                  (IntLiteral dummyPos 5)
                                                  (StringLiteral dummyPos "bye"))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Left $ typeError dummyPos [TigerInt] (Right TigerStr))]
+            `shouldBe` [Left $ typeError dummyPos [TigerInt] (Right (emptyEnv, TigerStr))]
         it "returns the left error if both types are wrong" $ do
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
                                                  (NoValue dummyPos)
                                                  (TigerTypes.Nil dummyPos))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Left $ typeError dummyPos [TigerInt, TigerStr] (Right Unit))]
+            `shouldBe` [Left $ typeError dummyPos [TigerInt, TigerStr] (Right (emptyEnv, Unit))]
       describe "and / or" $ do
         let operators = [And, Or]
         it "types as TigerInt when all arguments are TigerInt" $ do
@@ -114,48 +114,48 @@ spec = do
                                                  (IntLiteral dummyPos 5)
                                                  (IntLiteral dummyPos 3))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Right TigerInt)]
+            `shouldBe` [Right (emptyEnv, TigerInt)]
         it "returns a mismatch error when the left expression is not an int" $ do
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
                                                  (StringLiteral dummyPos "hello")
                                                  (IntLiteral dummyPos 3))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Left $ typeError dummyPos [TigerInt] $ Right TigerStr)]
+            `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, TigerStr)]
         it "returns a mismatch error when the right expression is not an int" $ do
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
                                                  (IntLiteral dummyPos 3)
                                                  (StringLiteral dummyPos "hello"))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Left $ typeError dummyPos [TigerInt] $ Right TigerStr)]
+            `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, TigerStr)]
         it "returns a mismatch error for the left expression when the both are not ints" $ do
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
                                                  (TigerTypes.Nil dummyPos)
                                                  (StringLiteral dummyPos "hello"))
           (nub $ typ <$> operators)
-            `shouldBe` [(emptyEnv, Left $ typeError dummyPos [TigerInt] $ Right Typing.Nil)]
+            `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, Typing.Nil)]
     describe "typeCheck Grouped" $ do
       it "types as the type of the grouped expression" $ do
         typeCheck emptyEnv (Grouped dummyPos (IntLiteral dummyPos 5))
-          `shouldBe` (emptyEnv, Right TigerInt)
+          `shouldBe` Right (emptyEnv, TigerInt)
       it "passes through an error" $ do
         typeCheck emptyEnv (Grouped dummyPos
                                     (BinOp dummyPos
                                            Addition
                                            (StringLiteral dummyPos "hi")
                                            (IntLiteral dummyPos 5)))
-          `shouldBe` (emptyEnv, Left $ typeError dummyPos [TigerInt] (Right TigerStr))
+          `shouldBe` Left (typeError dummyPos [TigerInt] (Right (emptyEnv, TigerStr)))
     describe "typeCheck Sequence" $ do
       it "types as Unit for an empty list" $ do
-        typeCheck emptyEnv (Sequence dummyPos []) `shouldBe` (emptyEnv, Right Unit)
+        typeCheck emptyEnv (Sequence dummyPos []) `shouldBe` Right (emptyEnv, Unit)
       it "type checks as the type of the last expression" $ do
         typeCheck emptyEnv (Sequence dummyPos
                                      [ IntLiteral dummyPos 5
                                      , StringLiteral dummyPos "hi"
                                      ])
-          `shouldBe` (emptyEnv, Right TigerStr)
+          `shouldBe` Right (emptyEnv, TigerStr)
       it "passes through an error" $ do
         typeCheck emptyEnv (Sequence dummyPos
                                      [ IntLiteral dummyPos 5
@@ -164,7 +164,7 @@ spec = do
                                               (StringLiteral dummyPos "hi")
                                               (IntLiteral dummyPos 5))
                                      ])
-          `shouldBe` (emptyEnv, Left $ typeError dummyPos [TigerInt] (Right TigerStr))
+          `shouldBe` Left (typeError dummyPos [TigerInt] (Right (emptyEnv, TigerStr)))
       it "propogates an error early in the sequence" $ do
         typeCheck emptyEnv (Sequence dummyPos
                                      [ (BinOp dummyPos
@@ -173,7 +173,7 @@ spec = do
                                               (IntLiteral dummyPos 5))
                                      , IntLiteral dummyPos 5
                                      ])
-          `shouldBe` (emptyEnv, Left $ typeError dummyPos [TigerInt] (Right TigerStr))
+          `shouldBe` Left (typeError dummyPos [TigerInt] (Right (emptyEnv, TigerStr)))
     describe "typeCheck ArrayCreation" $ do
       let (words, table) = Sym.put "words" $ Sym.newTable 0
       let env = ( table
@@ -188,7 +188,7 @@ spec = do
                                      "words"
                                      (IntLiteral lenPos 5)
                                      (StringLiteral iniPos ""))
-          `shouldBe` (env, Right $ Name words (Just $ Array TigerStr))
+          `shouldBe` Right (env, Name words (Just $ Array TigerStr))
     --   it "returns an error if the first expression is not an int" $ do
     --     typeCheck env (ArrayCreation dummyPos
     --                                  "words"
