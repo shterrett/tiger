@@ -5,7 +5,7 @@ import Data.List (nub)
 import Data.Maybe (catMaybes)
 import qualified Environment as Env
 import qualified Symbol as Sym
-import TigerTypes (Expression(..), Operator(..))
+import TigerTypes (Expression(..), Operator(..), LValue(..))
 import Text.Parsec.Pos (initialPos, newPos)
 import Typing
 
@@ -24,9 +24,10 @@ spec = do
           (fmap (\(s, t) -> (,) <$> Sym.get s initialSymbolTable <*> (Just t))
                 initialTypes)
     let emptyEnv =
-          ( initialSymbolTable
-          , initialEnv
-          ) :: TypeEnv
+          TypeEnv { sym = initialSymbolTable
+                  , tEnv = initialEnv
+                  , vEnv = Env.fromList []
+                  }
     let dummyPos = initialPos ""
     describe "typeError" $ do
       it "formats an error message for a type mismatch" $ do
@@ -191,9 +192,10 @@ spec = do
           `shouldBe` Left (typeError dummyPos [TigerInt] (Right (emptyEnv, TigerStr)))
     describe "typeCheck ArrayCreation" $ do
       let (words, table) = Sym.put "words" $ initialSymbolTable
-      let env = ( table
-                , Env.pushScope [(words, Name words $ Just (Array TigerStr))] initialEnv
-                )
+      let env = emptyEnv { sym = table
+                         , tEnv = (Env.pushScope [(words, Name words $ Just (Array TigerStr))]
+                                                 (tEnv emptyEnv))
+                         }
       let lenPos = newPos "" 1 5
       let iniPos = newPos "" 1 10
       it ("type checks as the stated array type when it is declared properly, " ++
@@ -218,9 +220,9 @@ spec = do
           `shouldBe` Left (typeError iniPos [TigerStr] (Right (env, TigerInt)))
       it "returns an error if the stated type is not an array type" $ do
         let (number, table') = Sym.put "number" table
-        let env' = ( table'
-                   , Env.addBinding (number, (Name number $ Just TigerInt)) (snd env)
-                   )
+        let env' = env { sym = table'
+                       , tEnv = (Env.addBinding (number, (Name number $ Just TigerInt)) (tEnv env))
+                       }
         typeCheck env' (ArrayCreation dummyPos
                                       "number"
                                       (IntLiteral lenPos 5)
@@ -231,16 +233,16 @@ spec = do
                                      "number"
                                      (IntLiteral lenPos 5)
                                      (IntLiteral iniPos 0))
-          `shouldBe` Left (undeclaredType dummyPos "number")
+          `shouldBe` Left (undeclaredError "type" dummyPos "number")
     describe "typeCheck RecordCreation" $ do
       let (person, table) = Sym.put "person" $ initialSymbolTable
       let personType = Name person $ Just (Record [("name", TigerStr), ("age", TigerInt)])
-      let env = ( table
-                , Env.pushScope [( person
-                                , personType
-                                )]
-                                (snd emptyEnv)
-                )
+      let env = emptyEnv { sym = table
+                         , tEnv  = (Env.pushScope [( person
+                                                  , personType
+                                                  )]
+                                                  (tEnv emptyEnv))
+                         }
       let f1Pos = newPos "" 1 5
       let f2Pos = newPos "" 1 10
       it ("type checks as the stated record when it is declared properly, " ++
@@ -278,4 +280,26 @@ spec = do
                                       [ ("name", StringLiteral f1Pos "John")
                                       , ("age", IntLiteral f2Pos 21)
                                       ])
-          `shouldBe` Left (undeclaredType dummyPos "alien")
+          `shouldBe` Left (undeclaredError "type" dummyPos "alien")
+    describe "typeCheck LValueExp Id" $ do
+      it "returns the type of the atom" $ do
+        let (x, table) = Sym.put "x" initialSymbolTable
+        let env = emptyEnv { sym = table
+                           , vEnv = (Env.pushScope [(x, TigerInt)] (vEnv emptyEnv))
+                           }
+        typeCheck env (LValExp dummyPos $ Id "x")
+          `shouldBe` Right (env, TigerInt)
+      it "returns an error if the atom has not yet been declared" $ do
+        typeCheck emptyEnv (LValExp dummyPos $ Id "x")
+          `shouldBe` Left (undeclaredError "identifier" dummyPos "x")
+    -- describe "typeCheck LValue RecordAccess" $ do
+    --   it "returns the type of the field of the record" $ do
+    --     let (person, table) = Sym.put "person" initialSymbolTable
+    --     let personType = Name person $ Just (Record [("name", TigerStr), ("age", TigerInt)])
+    --     let env = emptyEnv { sym = table
+    --                        , tEnv = (Env.pushScope [( person
+    --                                                , personType
+    --                                                )]
+    --                                                (snd emptyEnv))
+    --                        }
+    --     typeCheck env (LValExp dummyPos $ RecordAccess (Id "person_1") "name")

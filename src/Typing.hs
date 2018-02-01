@@ -6,6 +6,7 @@ import Data.List (intersperse, foldr1, foldl', sortBy, sort)
 import Data.Either (isLeft)
 import Data.Ord (comparing)
 import TigerTypes ( Expression(..)
+                  , LValue(..)
                   , Operator(..)
                   , TypeName
                   , position
@@ -40,7 +41,11 @@ instance Eq ProgramType where
     (==) (Name n _) (Name m _) = n == m
     (==) _ _ = False
 
-type TypeEnv = (Sym.SymbolTable, Env.Environment ProgramType)
+data TypeEnv = TypeEnv { tEnv :: Env.Environment ProgramType
+                       , vEnv :: Env.Environment ProgramType
+                       , sym :: Sym.SymbolTable
+                       }
+  deriving(Show, Eq)
 type TypeError = String
 
 typeCheck :: TypeEnv -> Expression -> Either TypeError (TypeEnv, ProgramType)
@@ -55,6 +60,7 @@ typeCheck e (Grouped _ exp) = typeCheck e exp
 typeCheck e (Sequence pos exps) = foldM (\(e', _) exp -> typeCheck e' exp) (e, Unit) exps
 typeCheck e (ArrayCreation pos name exp1 exp2) = checkArray e pos name exp1 exp2
 typeCheck e (RecordCreation pos name fields) = checkRecord e pos name fields
+typeCheck e (LValExp pos (Id name)) = lookupValue e name pos
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -128,16 +134,29 @@ lookupType :: TypeEnv ->
               TypeName ->
               SourcePos ->
               Either TypeError (TypeEnv, ProgramType)
-lookupType env@(table, ev) name pos =
-    (maybeToEither ((,) env <$> (Sym.get name table >>= (lookup ev)))
-                              (undeclaredType pos name))
-    where lookup = flip Env.lookup
-          maybeToEither Nothing e = Left e
-          maybeToEither (Just t) _ = Right t
+lookupType env name pos =
+    (maybeToEither ((,) env <$> (lookupTypeVal env name tEnv))
+                              (undeclaredError "type" pos name))
 
-undeclaredType :: SourcePos -> TypeName -> TypeError
-undeclaredType pos name =
-    "Type Error! Undeclared Type " ++ name ++ " at" ++ show pos
+lookupValue :: TypeEnv ->
+               TypeName ->
+               SourcePos ->
+               Either TypeError (TypeEnv, ProgramType)
+lookupValue env name pos =
+    (maybeToEither ((,) env <$> (lookupTypeVal env name vEnv))
+                              (undeclaredError "identifier" pos name))
+
+maybeToEither :: Maybe a -> b -> Either b a
+maybeToEither Nothing e = Left e
+maybeToEither (Just t) _ = Right t
+
+undeclaredError :: String -> SourcePos -> Atom -> TypeError
+undeclaredError typeOf pos name =
+    "Type Error! Undeclared " ++ typeOf ++ ": " ++ name ++ " at " ++ show pos
+
+lookupTypeVal :: TypeEnv -> String -> (TypeEnv -> Env.Environment a) -> Maybe a
+lookupTypeVal env name getEnv = Sym.get name (sym env) >>= (lookup (getEnv env))
+  where lookup = flip Env.lookup
 
 typeError :: SourcePos -> [ProgramType] -> Either TypeError (TypeEnv, ProgramType) -> TypeError
 typeError pos expected (Right (_, actual)) =
