@@ -318,3 +318,20 @@ spec = do
                            }
         typeCheck env (LValExp dummyPos $ RecordAccess (Id "person") "birthday")
           `shouldBe` Left (undeclaredError "field" dummyPos "birthday")
+      it "handles chained record accesses" $ do
+        let (person, table) = Sym.put "person" initialSymbolTable
+        let (pet, table') = Sym.put "pet" table
+        let petType = Name pet $ Just (Record [("breed", TigerStr)])
+        let personType = Name person $ Just (Record [("name", TigerStr), ("pet", petType)])
+        let env = emptyEnv { sym = table
+                           , vEnv = (Env.pushScope [ ( person
+                                                     , personType
+                                                     )
+                                                   , ( pet
+                                                     , petType
+                                                     )]
+                                                   (vEnv emptyEnv))
+                           }
+        typeCheck env (LValExp dummyPos $ RecordAccess (RecordAccess (Id "person") "pet")
+                                                       "breed")
+          `shouldBe` Right (env, TigerStr)

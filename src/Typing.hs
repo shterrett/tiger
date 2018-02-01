@@ -126,10 +126,13 @@ checkRecordAccess :: TypeEnv
                      -> Atom
                      -> Either TypeError (TypeEnv, ProgramType)
 checkRecordAccess env pos (Id record) field =
-  lookupValue env record pos >>=
-  recordFields pos >>=
-  (\fields -> (,) env <$> maybeToEither (lookup field fields) (undeclaredError "field" pos field))
-checkRecordAccess env pos (RecordAccess record' field') field = Right (env, Unit)
+    lookupValue env record pos >>=
+    recordFields pos >>=
+    (\fields -> (,) env <$> maybeToEither (lookup field fields) (undeclaredError "field" pos field))
+checkRecordAccess env pos (RecordAccess record' field') field =
+    checkRecordAccess env pos record' field' >>=
+    recordFields pos >>=
+    (\fields -> (,) env <$> maybeToEither (lookup field fields) (undeclaredError "field" pos field))
 checkRecordAccess env pos (ArraySubscript array exp) field = Right (env, Unit)
 
 recordFields :: SourcePos -> (TypeEnv, ProgramType) -> Either TypeError [(Atom, ProgramType)]
