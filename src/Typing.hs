@@ -49,17 +49,22 @@ typeCheck e (ValuelessExpression _ _) = Right (e, Unit)
 typeCheck e (NoValue _) = Right (e, Unit)
 typeCheck e (IntLiteral _ _) = Right (e, TigerInt)
 typeCheck e (StringLiteral _ _) = Right (e, TigerStr)
-typeCheck e (Negation pos exp) =
-    case typeCheck e exp of
-      success@(Right (_, TigerInt)) -> success
-      mismatch -> Left $ typeError pos [TigerInt] mismatch
-typeCheck e (BinOp pos op exp1 exp2)
+typeCheck e (Negation pos exp) = verifyType e TigerInt exp
+typeCheck e (BinOp pos op exp1 exp2) = checkBinOp e pos op exp1 exp2
+typeCheck e (Grouped _ exp) = typeCheck e exp
+typeCheck e (Sequence pos exps) = foldM (\(e', _) exp -> typeCheck e' exp) (e, Unit) exps
+typeCheck e (ArrayCreation pos name exp1 exp2) = checkArray e pos name exp1 exp2
+typeCheck e (RecordCreation pos name fields) = checkRecord e pos name fields
+
+checkBinOp :: TypeEnv ->
+              SourcePos ->
+              Operator ->
+              Expression ->
+              Expression ->
+              Either TypeError (TypeEnv, ProgramType)
+checkBinOp e pos op exp1 exp2
     | op `elem` [Addition, Subtraction, Multiplication, Division, And, Or] =
-      case (typeCheck e exp1, typeCheck e exp2) of
-        ((Right (_, TigerInt)), (Right (_, TigerInt))) -> Right (e, TigerInt)
-        (mismatch, (Right (_, TigerInt))) -> Left $ typeError pos [TigerInt] mismatch
-        ((Right (_, TigerInt)), mismatch) -> Left $ typeError pos [TigerInt] mismatch
-        (mismatch, _) -> Left $ typeError pos [TigerInt] mismatch
+      foldM (\(e', typ) exp -> verifyType e' TigerInt exp) (e, TigerInt) [exp1, exp2]
     | op `elem` [Equality, NonEquality, LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual] =
       case (typeCheck e exp1, typeCheck e exp2) of
         ((Right (_, TigerInt)), (Right (_, TigerInt))) -> Right (e, TigerInt)
@@ -67,10 +72,6 @@ typeCheck e (BinOp pos op exp1 exp2)
         ((Right (_, TigerInt)), mismatch) -> Left $ typeError pos [TigerInt] mismatch
         ((Right (_, TigerStr)), mismatch) -> Left $ typeError pos [TigerStr] mismatch
         (mismatch, _) -> Left $ typeError pos [TigerInt, TigerStr] mismatch
-typeCheck e (Grouped _ exp) = typeCheck e exp
-typeCheck e (Sequence pos exps) = foldM (\(e', _) exp -> typeCheck e' exp) (e, Unit) exps
-typeCheck e (ArrayCreation pos name exp1 exp2) = checkArray e pos name exp1 exp2
-typeCheck e (RecordCreation pos name fields) = checkRecord e pos name fields
 
 checkArray :: TypeEnv ->
               SourcePos ->
@@ -83,15 +84,9 @@ checkArray env pos name lengthExp initExp =
     where checkArrayType typ@(_, Name _ (Just (Array _))) = Right typ
           checkArrayType mismatch = Left $ typeError pos [Array Unit] (Right mismatch)
           checkLengthExp (ev, arrType) =
-            case typeCheck ev lengthExp of
-              (Right (ev', TigerInt)) -> Right (ev', arrType)
-              mismatch -> Left $ typeError (position lengthExp) [TigerInt] mismatch
+            (\(ev', _) -> (ev', arrType)) <$> verifyType ev TigerInt lengthExp
           checkScalarExp typ@(ev, arrType@((Name _ (Just (Array expected))))) =
-            case typeCheck ev initExp of
-              scalarResult@(Right (ev', scalarType)) -> if expected == scalarType
-                                                          then Right typ
-                                                          else Left $ typeError (position initExp) [expected] scalarResult
-              mismatch -> Left $ typeError pos [expected] mismatch
+            (\(ev', _) -> (ev', arrType)) <$> verifyType ev expected initExp
 
 checkRecord :: TypeEnv
                -> SourcePos
@@ -99,10 +94,10 @@ checkRecord :: TypeEnv
                -> [(Atom, Expression)]
                -> Either TypeError (TypeEnv, ProgramType)
 checkRecord env pos name fields =
-    (lookupType env name pos) >>= checkRecordType >>= checkFieldsPresent >>= checkFieldsTypes
+    (lookupType env name pos) >>= checkRecordType >>= verifyTypesPresent >>= checkFieldsTypes
     where checkRecordType typ@(_, Name _ (Just (Record _))) = Right typ
           checkRecordType mismatch = Left $ typeError pos [Record []] (Right mismatch)
-          checkFieldsPresent typ@(_, Name _ (Just (Record typeFields))) =
+          verifyTypesPresent typ@(_, Name _ (Just (Record typeFields))) =
             let actualFields = sort (fst <$> fields)
                 expectedFields = sort (fst <$> typeFields)
             in if actualFields == expectedFields
@@ -115,13 +110,13 @@ checkRecord env pos name fields =
             let exps = snd <$> (sortBy (comparing fst) fields)
                 types = snd <$> (sortBy (comparing fst ) typeFields)
             in const typ <$>
-               foldM (\(e', _) (exp, typ) -> checkField e' typ exp) typ (zip exps types)
+               foldM (\(e', _) (exp, typ) -> verifyType e' typ exp) typ (zip exps types)
 
-checkField :: TypeEnv
+verifyType :: TypeEnv
               -> ProgramType
               -> Expression
               -> Either TypeError (TypeEnv, ProgramType)
-checkField env typ exp =
+verifyType env typ exp =
     case typeCheck env exp of
       res@(Right (env', act)) ->
         if act == typ
