@@ -292,14 +292,29 @@ spec = do
       it "returns an error if the atom has not yet been declared" $ do
         typeCheck emptyEnv (LValExp dummyPos $ Id "x")
           `shouldBe` Left (undeclaredError "identifier" dummyPos "x")
-    -- describe "typeCheck LValue RecordAccess" $ do
-    --   it "returns the type of the field of the record" $ do
-    --     let (person, table) = Sym.put "person" initialSymbolTable
-    --     let personType = Name person $ Just (Record [("name", TigerStr), ("age", TigerInt)])
-    --     let env = emptyEnv { sym = table
-    --                        , tEnv = (Env.pushScope [( person
-    --                                                , personType
-    --                                                )]
-    --                                                (snd emptyEnv))
-    --                        }
-    --     typeCheck env (LValExp dummyPos $ RecordAccess (Id "person_1") "name")
+    describe "typeCheck LValue RecordAccess" $ do
+      it "returns the type of the field of the record" $ do
+        let (person, table) = Sym.put "person" initialSymbolTable
+        let personType = Name person $ Just (Record [("name", TigerStr), ("age", TigerInt)])
+        let env = emptyEnv { sym = table
+                           , vEnv = (Env.pushScope [( person
+                                                   , personType
+                                                   )]
+                                                   (vEnv emptyEnv))
+                           }
+        typeCheck env (LValExp dummyPos $ RecordAccess (Id "person") "name")
+          `shouldBe` Right (env, TigerStr)
+      it "returns an error if the record has not been declared" $ do
+        typeCheck emptyEnv (LValExp dummyPos $ RecordAccess (Id "person") "name")
+          `shouldBe` Left (undeclaredError "identifier" dummyPos "person")
+      it "returns an error if the field is not a member of the record type" $ do
+        let (person, table) = Sym.put "person" initialSymbolTable
+        let personType = Name person $ Just (Record [("name", TigerStr), ("age", TigerInt)])
+        let env = emptyEnv { sym = table
+                           , vEnv = (Env.pushScope [( person
+                                                   , personType
+                                                   )]
+                                                   (vEnv emptyEnv))
+                           }
+        typeCheck env (LValExp dummyPos $ RecordAccess (Id "person") "birthday")
+          `shouldBe` Left (undeclaredError "field" dummyPos "birthday")

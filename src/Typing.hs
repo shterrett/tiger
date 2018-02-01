@@ -61,6 +61,7 @@ typeCheck e (Sequence pos exps) = foldM (\(e', _) exp -> typeCheck e' exp) (e, U
 typeCheck e (ArrayCreation pos name exp1 exp2) = checkArray e pos name exp1 exp2
 typeCheck e (RecordCreation pos name fields) = checkRecord e pos name fields
 typeCheck e (LValExp pos (Id name)) = lookupValue e name pos
+typeCheck e (LValExp pos (RecordAccess record field)) = checkRecordAccess e pos record field
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -118,6 +119,24 @@ checkRecord env pos name fields =
             in const typ <$>
                foldM (\(e', _) (exp, typ) -> verifyType e' typ exp) typ (zip exps types)
 
+
+checkRecordAccess :: TypeEnv
+                     -> SourcePos
+                     -> LValue
+                     -> Atom
+                     -> Either TypeError (TypeEnv, ProgramType)
+checkRecordAccess env pos (Id record) field =
+  lookupValue env record pos >>=
+  recordFields pos >>=
+  (\fields -> (,) env <$> maybeToEither (lookup field fields) (undeclaredError "field" pos field))
+checkRecordAccess env pos (RecordAccess record' field') field = Right (env, Unit)
+checkRecordAccess env pos (ArraySubscript array exp) field = Right (env, Unit)
+
+recordFields :: SourcePos -> (TypeEnv, ProgramType) -> Either TypeError [(Atom, ProgramType)]
+recordFields _ (_, (Record fields)) = Right fields
+recordFields _ (_, (Name _ (Just (Record fields)))) = Right fields
+recordFields pos mismatch = Left $ typeError pos [Record []] (Right mismatch)
+
 verifyType :: TypeEnv
               -> ProgramType
               -> Expression
@@ -139,7 +158,7 @@ lookupType env name pos =
                               (undeclaredError "type" pos name))
 
 lookupValue :: TypeEnv ->
-               TypeName ->
+               Atom ->
                SourcePos ->
                Either TypeError (TypeEnv, ProgramType)
 lookupValue env name pos =
