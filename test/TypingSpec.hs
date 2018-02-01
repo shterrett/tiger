@@ -2,6 +2,7 @@ module TypingSpec where
 
 import Test.Hspec
 import Data.List (nub)
+import Data.Maybe (catMaybes)
 import qualified Environment as Env
 import qualified Symbol as Sym
 import TigerTypes (Expression(..), Operator(..))
@@ -9,9 +10,23 @@ import Text.Parsec.Pos (initialPos, newPos)
 import Typing
 
 spec = do
-    let emptyEnv = ( Sym.newTable 0
-                   , Env.fromList []
-                   ) :: TypeEnv
+    let initialTypes =
+          [ ("int", TigerInt)
+          , ("string", TigerStr)
+          , ("nil", Typing.Nil)
+          ]
+    let initialSymbolTable =
+          foldr (\(s, _) tbl -> snd $ Sym.put s tbl)
+                (Sym.newTable 0)
+                initialTypes
+    let initialEnv =
+          Env.fromList . catMaybes $
+          (fmap (\(s, t) -> (,) <$> Sym.get s initialSymbolTable <*> (Just t))
+                initialTypes)
+    let emptyEnv =
+          ( initialSymbolTable
+          , initialEnv
+          ) :: TypeEnv
     let dummyPos = initialPos ""
     describe "typeError" $ do
       it "formats an error message for a type mismatch" $ do
@@ -175,9 +190,9 @@ spec = do
                                      ])
           `shouldBe` Left (typeError dummyPos [TigerInt] (Right (emptyEnv, TigerStr)))
     describe "typeCheck ArrayCreation" $ do
-      let (words, table) = Sym.put "words" $ Sym.newTable 0
+      let (words, table) = Sym.put "words" $ initialSymbolTable
       let env = ( table
-                , Env.fromList [(words, Name words $ Just (Array TigerStr))]
+                , Env.pushScope [(words, Name words $ Just (Array TigerStr))] initialEnv
                 )
       let lenPos = newPos "" 1 5
       let iniPos = newPos "" 1 10
@@ -217,3 +232,50 @@ spec = do
                                      (IntLiteral lenPos 5)
                                      (IntLiteral iniPos 0))
           `shouldBe` Left (undeclaredType dummyPos "number")
+    describe "typeCheck RecordCreation" $ do
+      let (person, table) = Sym.put "person" $ initialSymbolTable
+      let personType = Name person $ Just (Record [("name", TigerStr), ("age", TigerInt)])
+      let env = ( table
+                , Env.pushScope [( person
+                                , personType
+                                )]
+                                (snd emptyEnv)
+                )
+      let f1Pos = newPos "" 1 5
+      let f2Pos = newPos "" 1 10
+      it ("type checks as the stated record when it is declared properly, " ++
+          "and each field matches the stated type") $ do
+        typeCheck env (RecordCreation dummyPos
+                                      "person"
+                                      [ ("name", StringLiteral f1Pos "John")
+                                      , ("age", IntLiteral f2Pos 21)
+                                      ])
+        `shouldBe` Right (env, personType)
+      it "type checks when fields are in a different order" $ do
+        typeCheck env (RecordCreation dummyPos
+                                      "person"
+                                      [ ("age", IntLiteral f1Pos 21)
+                                      , ("name", StringLiteral f2Pos "John")
+                                      ])
+        `shouldBe` Right (env, personType)
+      it "returns an error if one of the fields does not match the declared type" $ do
+        typeCheck env (RecordCreation dummyPos
+                                      "person"
+                                      [ ("age", StringLiteral f1Pos "old")
+                                      , ("name", StringLiteral f2Pos "John")
+                                      ])
+        `shouldBe` Left (typeError f1Pos [TigerInt] (Right (env, TigerStr)))
+      it "returns an error if the declared type is not a record type" $ do
+        typeCheck env (RecordCreation dummyPos
+                                      "string"
+                                      [ ("name", StringLiteral f1Pos "John")
+                                      , ("age", IntLiteral f2Pos 21)
+                                      ])
+        `shouldBe` Left (typeError dummyPos [Record []] (Right (env, TigerStr)))
+      it "returns an error if the type is not declared" $ do
+        typeCheck env (RecordCreation dummyPos
+                                      "alien"
+                                      [ ("name", StringLiteral f1Pos "John")
+                                      , ("age", IntLiteral f2Pos 21)
+                                      ])
+          `shouldBe` Left (undeclaredType dummyPos "alien")

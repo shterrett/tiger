@@ -2,16 +2,22 @@ module Typing where
 
 import Text.Parsec.Pos (SourcePos)
 import Control.Monad (foldM)
-import Data.List (intersperse, foldr1, foldl')
+import Data.List (intersperse, foldr1, foldl', sortBy, sort)
 import Data.Either (isLeft)
-import TigerTypes (Expression(..), Operator(..), TypeFields, TypeName, position)
+import Data.Ord (comparing)
+import TigerTypes ( Expression(..)
+                  , Operator(..)
+                  , TypeName
+                  , position
+                  , Atom
+                  )
 import qualified Symbol as Sym
 import qualified Environment as Env
 
 data ProgramType =
     TigerInt
     | TigerStr
-    | Record TypeFields
+    | Record [(Atom, ProgramType)]
     | Array ProgramType
     | Nil
     | Unit
@@ -64,6 +70,7 @@ typeCheck e (BinOp pos op exp1 exp2)
 typeCheck e (Grouped _ exp) = typeCheck e exp
 typeCheck e (Sequence pos exps) = foldM (\(e', _) exp -> typeCheck e' exp) (e, Unit) exps
 typeCheck e (ArrayCreation pos name exp1 exp2) = checkArray e pos name exp1 exp2
+typeCheck e (RecordCreation pos name fields) = checkRecord e pos name fields
 
 checkArray :: TypeEnv ->
               SourcePos ->
@@ -85,6 +92,42 @@ checkArray env pos name lengthExp initExp =
                                                           then Right typ
                                                           else Left $ typeError (position initExp) [expected] scalarResult
               mismatch -> Left $ typeError pos [expected] mismatch
+
+checkRecord :: TypeEnv
+               -> SourcePos
+               -> TypeName
+               -> [(Atom, Expression)]
+               -> Either TypeError (TypeEnv, ProgramType)
+checkRecord env pos name fields =
+    (lookupType env name pos) >>= checkRecordType >>= checkFieldsPresent >>= checkFieldsTypes
+    where checkRecordType typ@(_, Name _ (Just (Record _))) = Right typ
+          checkRecordType mismatch = Left $ typeError pos [Record []] (Right mismatch)
+          checkFieldsPresent typ@(_, Name _ (Just (Record typeFields))) =
+            let actualFields = sort (fst <$> fields)
+                expectedFields = sort (fst <$> typeFields)
+            in if actualFields == expectedFields
+               then Right typ
+               else Left $ "Type Error! Expected fields " ++
+                           (mconcat $ intersperse ", " (show <$> expectedFields)) ++
+                           "But got " ++
+                           (mconcat $ intersperse ", " (show <$> actualFields))
+          checkFieldsTypes typ@(_, Name _ (Just (Record typeFields))) =
+            let exps = snd <$> (sortBy (comparing fst) fields)
+                types = snd <$> (sortBy (comparing fst ) typeFields)
+            in const typ <$>
+               foldM (\(e', _) (exp, typ) -> checkField e' typ exp) typ (zip exps types)
+
+checkField :: TypeEnv
+              -> ProgramType
+              -> Expression
+              -> Either TypeError (TypeEnv, ProgramType)
+checkField env typ exp =
+    case typeCheck env exp of
+      res@(Right (env', act)) ->
+        if act == typ
+        then Right (env', act)
+        else Left $ typeError (position exp) [typ] res
+      mismatch -> Left $ typeError (position exp) [typ] mismatch
 
 lookupType :: TypeEnv ->
               TypeName ->
