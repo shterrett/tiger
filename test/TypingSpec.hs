@@ -378,3 +378,51 @@ spec = do
                                                                (IntLiteral subPos 2))
                                                (IntLiteral subPos 3)))
           `shouldBe` Right (env, TigerInt)
+    describe "nested record and array access" $ do
+      let (people, table) = Sym.put "people" initialSymbolTable
+      let (person, table') = Sym.put "person" table
+      let (names, table'') = Sym.put "names" table'
+      let (name, table''') = Sym.put "name" table''
+      let nameType = Name name $ Just (Record [ ("first", TigerStr)
+                                              , ("last", TigerStr)
+                                              ])
+      let namesType = Name names $ Just (Array nameType)
+      let personType = Name person $ Just (Record [ ("names", namesType)
+                                                  , ("age", TigerInt)
+                                                  ])
+      let peopleType = Name people $ Just (Array personType)
+      let env = emptyEnv { sym = table'''
+                         , tEnv = Env.pushScope [ (people, peopleType)
+                                                , (person, personType)
+                                                , (names, namesType)
+                                                , (name, nameType)
+                                                ]
+                                                (tEnv emptyEnv)
+                         , vEnv = Env.pushScope [ (people, peopleType)
+                                                , (person, personType)
+                                                , (names, namesType)
+                                                , (name, nameType)
+                                                ]
+                                                (vEnv emptyEnv)
+                         }
+
+      let pos1 = newPos "" 1 1
+
+      it "returns the type of a record field from an array element" $ do
+        typeCheck env (LValExp dummyPos
+                               (RecordAccess (ArraySubscript (Id "people")
+                                                             (IntLiteral pos1 0))
+                                             "age"))
+          `shouldBe` Right (env, TigerInt)
+      it "returns the type of an array element in a record field" $ do
+        typeCheck env (LValExp dummyPos
+                               (ArraySubscript (RecordAccess (Id "person") "names")
+                                               (IntLiteral pos1 0)))
+          `shouldBe` Right (env, nameType)
+      it "returns the type of an array element with index as record field" $ do
+        typeCheck env (LValExp dummyPos
+                               (ArraySubscript (Id "people")
+                                               (LValExp pos1
+                                                        (RecordAccess (Id "person")
+                                                                      "age"))))
+          `shouldBe` Right (env, personType)

@@ -138,7 +138,8 @@ checkRecordAccess env pos (Id record) field =
     lookupValue env record pos >>= recordFields pos >>= recordFieldType pos field
 checkRecordAccess env pos (RecordAccess record' field') field =
     checkRecordAccess env pos record' field' >>= recordFields pos >>= recordFieldType pos field
-checkRecordAccess env pos (ArraySubscript array exp) field = Right (env, Unit)
+checkRecordAccess env pos (ArraySubscript array exp) field =
+   arrayElementType env pos array >>= recordFields pos >>= recordFieldType pos field
 
 recordFields :: SourcePos -> (TypeEnv, ProgramType) -> Either TypeError (TypeEnv, [(Atom, ProgramType)])
 recordFields pos (env, (Record fields)) = Right (env, fields)
@@ -158,8 +159,11 @@ checkArraySubscript env pos arr@(ArraySubscript arr' exp') exp =
     verifyType env TigerInt exp' >>=
       (\(env', _) -> verifyType env' TigerInt exp) >>=
       (\(env'', _) -> arrayElementType env'' pos arr)
-checkArraySubscript env pos (RecordAccess record field) exp = Right (env, Unit)
-checkArraySubscript env pos lval exp =
+checkArraySubscript env pos (RecordAccess record field) exp =
+  verifyType env TigerInt exp >>
+    checkRecordAccess env pos record field >>=
+    scalarType pos
+checkArraySubscript env pos lval@(Id _) exp =
     verifyType env TigerInt exp >> arrayElementType env pos lval
 
 arrayElementType :: TypeEnv ->
