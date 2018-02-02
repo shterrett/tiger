@@ -70,6 +70,7 @@ typeCheck e (ArrayCreation pos name exp1 exp2) = checkArray e pos name exp1 exp2
 typeCheck e (RecordCreation pos name fields) = checkRecord e pos name fields
 typeCheck e (LValExp pos (Id name)) = lookupValue e name pos
 typeCheck e (LValExp pos (RecordAccess record field)) = checkRecordAccess e pos record field
+typeCheck e (LValExp pos (ArraySubscript arr sub)) = checkArraySubscript e pos arr sub
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -147,6 +148,30 @@ recordFields pos mismatch = Left $ typeError pos [Record []] (Right mismatch)
 recordFieldType :: SourcePos -> Atom -> (TypeEnv, [(Atom, ProgramType)]) -> Either TypeError (TypeEnv, ProgramType)
 recordFieldType pos field (env, fields) = (,) env <$>
     maybeToEither (lookup field fields) (undeclaredError Field pos field)
+
+checkArraySubscript :: TypeEnv
+                       -> SourcePos
+                       -> LValue
+                       -> Expression
+                       -> Either TypeError (TypeEnv, ProgramType)
+checkArraySubscript env pos arr@(ArraySubscript arr' exp') exp =
+    verifyType env TigerInt exp' >>=
+      (\(env', _) -> verifyType env' TigerInt exp) >>=
+      (\(env'', _) -> arrayElementType env'' pos arr)
+checkArraySubscript env pos (RecordAccess record field) exp = Right (env, Unit)
+checkArraySubscript env pos lval exp =
+    verifyType env TigerInt exp >> arrayElementType env pos lval
+
+arrayElementType :: TypeEnv ->
+                    SourcePos ->
+                    LValue ->
+                    Either TypeError (TypeEnv, ProgramType)
+arrayElementType env pos lval = typeCheck env (LValExp pos lval) >>= scalarType pos
+
+scalarType :: SourcePos -> (TypeEnv, ProgramType) -> Either TypeError (TypeEnv, ProgramType)
+scalarType _ (env', Array typ) = Right (env', typ)
+scalarType _ (env', Name _ (Just (Array typ))) = Right (env', typ)
+scalarType pos mismatch = Left $ typeError pos [Array Unit] (Right mismatch)
 
 verifyType :: TypeEnv
               -> ProgramType

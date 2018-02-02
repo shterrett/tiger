@@ -335,3 +335,46 @@ spec = do
         typeCheck env (LValExp dummyPos $ RecordAccess (RecordAccess (Id "person") "pet")
                                                        "breed")
           `shouldBe` Right (env, TigerStr)
+    describe "typeCheck LValue ArraySubscript" $ do
+      let (words, table) = Sym.put "words" $ initialSymbolTable
+      let arrayType = Name words $ Just (Array TigerStr)
+      let env = emptyEnv { sym = table
+                         , vEnv = (Env.pushScope [(words, arrayType)]
+                                                 (vEnv emptyEnv))
+                         }
+      let subPos = newPos "" 1 5
+
+      it "returns the type of the array elements" $ do
+        typeCheck env (LValExp dummyPos $ ArraySubscript (Id "words") (IntLiteral subPos 1))
+          `shouldBe` Right (env, TigerStr)
+      it "returns a type error if the subscript expression does not typecheck as int" $ do
+        typeCheck env (LValExp dummyPos $ ArraySubscript (Id "words") (StringLiteral subPos "1"))
+          `shouldBe` Left (typeError subPos [TigerInt] (Right (env, TigerStr)))
+      it "handles nested array access" $ do
+        let (numbers, table') = Sym.put "numbers" $ sym env
+        let numbersType = Name numbers $ Just (Array TigerInt)
+        let env' = env { sym = table'
+                       , vEnv = (Env.addBinding (numbers, numbersType) (vEnv env))
+                       }
+        let subPos2 = newPos "" 1 10
+        typeCheck env' (LValExp dummyPos
+                        (ArraySubscript (Id "words")
+                                        (LValExp subPos
+                                                (ArraySubscript (Id "numbers")
+                                                                (IntLiteral subPos2 0)))))
+
+          `shouldBe` Right (env', TigerStr)
+      it "handles chained array access" $ do
+        let (matrix, table) = Sym.put "matrix" $ initialSymbolTable
+        let matrixType = Name matrix $ Just (Array (Array TigerInt))
+        let env = emptyEnv { sym = table
+                           , vEnv = (Env.pushScope [(words, matrixType)]
+                                                   (vEnv emptyEnv))
+                           }
+        let subPos = newPos "" 1 5
+        let subPos2 = newPos "" 1 7
+        typeCheck env (LValExp dummyPos
+                               (ArraySubscript (ArraySubscript (Id "matrix")
+                                                               (IntLiteral subPos 2))
+                                               (IntLiteral subPos 3)))
+          `shouldBe` Right (env, TigerInt)
