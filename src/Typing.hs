@@ -48,6 +48,14 @@ data TypeEnv = TypeEnv { tEnv :: Env.Environment ProgramType
   deriving(Show, Eq)
 type TypeError = String
 
+data Declarable = Field
+               | Identifier
+               | Type
+instance Show Declarable where
+    show Field = "field"
+    show Identifier = "identifier"
+    show Type = "type"
+
 typeCheck :: TypeEnv -> Expression -> Either TypeError (TypeEnv, ProgramType)
 typeCheck e (TigerTypes.Nil _) = Right (e, Typing.Nil)
 typeCheck e (ValuelessExpression _ _) = Right (e, Unit)
@@ -126,19 +134,19 @@ checkRecordAccess :: TypeEnv
                      -> Atom
                      -> Either TypeError (TypeEnv, ProgramType)
 checkRecordAccess env pos (Id record) field =
-    lookupValue env record pos >>=
-    recordFields pos >>=
-    (\fields -> (,) env <$> maybeToEither (lookup field fields) (undeclaredError "field" pos field))
+    lookupValue env record pos >>= recordFields pos >>= recordFieldType pos field
 checkRecordAccess env pos (RecordAccess record' field') field =
-    checkRecordAccess env pos record' field' >>=
-    recordFields pos >>=
-    (\fields -> (,) env <$> maybeToEither (lookup field fields) (undeclaredError "field" pos field))
+    checkRecordAccess env pos record' field' >>= recordFields pos >>= recordFieldType pos field
 checkRecordAccess env pos (ArraySubscript array exp) field = Right (env, Unit)
 
-recordFields :: SourcePos -> (TypeEnv, ProgramType) -> Either TypeError [(Atom, ProgramType)]
-recordFields _ (_, (Record fields)) = Right fields
-recordFields _ (_, (Name _ (Just (Record fields)))) = Right fields
+recordFields :: SourcePos -> (TypeEnv, ProgramType) -> Either TypeError (TypeEnv, [(Atom, ProgramType)])
+recordFields pos (env, (Record fields)) = Right (env, fields)
+recordFields pos (env, (Name _ (Just (Record fields)))) = Right (env, fields)
 recordFields pos mismatch = Left $ typeError pos [Record []] (Right mismatch)
+
+recordFieldType :: SourcePos -> Atom -> (TypeEnv, [(Atom, ProgramType)]) -> Either TypeError (TypeEnv, ProgramType)
+recordFieldType pos field (env, fields) = (,) env <$>
+    maybeToEither (lookup field fields) (undeclaredError Field pos field)
 
 verifyType :: TypeEnv
               -> ProgramType
@@ -158,7 +166,7 @@ lookupType :: TypeEnv ->
               Either TypeError (TypeEnv, ProgramType)
 lookupType env name pos =
     (maybeToEither ((,) env <$> (lookupTypeVal env name tEnv))
-                              (undeclaredError "type" pos name))
+                              (undeclaredError Type pos name))
 
 lookupValue :: TypeEnv ->
                Atom ->
@@ -166,15 +174,15 @@ lookupValue :: TypeEnv ->
                Either TypeError (TypeEnv, ProgramType)
 lookupValue env name pos =
     (maybeToEither ((,) env <$> (lookupTypeVal env name vEnv))
-                              (undeclaredError "identifier" pos name))
+                              (undeclaredError Identifier pos name))
 
 maybeToEither :: Maybe a -> b -> Either b a
 maybeToEither Nothing e = Left e
 maybeToEither (Just t) _ = Right t
 
-undeclaredError :: String -> SourcePos -> Atom -> TypeError
-undeclaredError typeOf pos name =
-    "Type Error! Undeclared " ++ typeOf ++ ": " ++ name ++ " at " ++ show pos
+undeclaredError :: Declarable -> SourcePos -> Atom -> TypeError
+undeclaredError dec pos name =
+    "Type Error! Undeclared " ++ (show dec) ++ ": " ++ name ++ " at " ++ show pos
 
 lookupTypeVal :: TypeEnv -> String -> (TypeEnv -> Env.Environment a) -> Maybe a
 lookupTypeVal env name getEnv = Sym.get name (sym env) >>= (lookup (getEnv env))

@@ -233,7 +233,7 @@ spec = do
                                      "number"
                                      (IntLiteral lenPos 5)
                                      (IntLiteral iniPos 0))
-          `shouldBe` Left (undeclaredError "type" dummyPos "number")
+          `shouldBe` Left (undeclaredError Type dummyPos "number")
     describe "typeCheck RecordCreation" $ do
       let (person, table) = Sym.put "person" $ initialSymbolTable
       let personType = Name person $ Just (Record [("name", TigerStr), ("age", TigerInt)])
@@ -280,7 +280,7 @@ spec = do
                                       [ ("name", StringLiteral f1Pos "John")
                                       , ("age", IntLiteral f2Pos 21)
                                       ])
-          `shouldBe` Left (undeclaredError "type" dummyPos "alien")
+          `shouldBe` Left (undeclaredError Type dummyPos "alien")
     describe "typeCheck LValueExp Id" $ do
       it "returns the type of the atom" $ do
         let (x, table) = Sym.put "x" initialSymbolTable
@@ -291,7 +291,7 @@ spec = do
           `shouldBe` Right (env, TigerInt)
       it "returns an error if the atom has not yet been declared" $ do
         typeCheck emptyEnv (LValExp dummyPos $ Id "x")
-          `shouldBe` Left (undeclaredError "identifier" dummyPos "x")
+          `shouldBe` Left (undeclaredError Identifier dummyPos "x")
     describe "typeCheck LValue RecordAccess" $ do
       it "returns the type of the field of the record" $ do
         let (person, table) = Sym.put "person" initialSymbolTable
@@ -306,7 +306,7 @@ spec = do
           `shouldBe` Right (env, TigerStr)
       it "returns an error if the record has not been declared" $ do
         typeCheck emptyEnv (LValExp dummyPos $ RecordAccess (Id "person") "name")
-          `shouldBe` Left (undeclaredError "identifier" dummyPos "person")
+          `shouldBe` Left (undeclaredError Identifier dummyPos "person")
       it "returns an error if the field is not a member of the record type" $ do
         let (person, table) = Sym.put "person" initialSymbolTable
         let personType = Name person $ Just (Record [("name", TigerStr), ("age", TigerInt)])
@@ -317,7 +317,7 @@ spec = do
                                                    (vEnv emptyEnv))
                            }
         typeCheck env (LValExp dummyPos $ RecordAccess (Id "person") "birthday")
-          `shouldBe` Left (undeclaredError "field" dummyPos "birthday")
+          `shouldBe` Left (undeclaredError Field dummyPos "birthday")
       it "handles chained record accesses" $ do
         let (person, table) = Sym.put "person" initialSymbolTable
         let (pet, table') = Sym.put "pet" table
