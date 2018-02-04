@@ -197,8 +197,9 @@ spec = do
           `shouldBe` Left (typeError dummyPos [TigerInt] (Right (emptyEnv, TigerStr)))
     describe "typeCheck ArrayCreation" $ do
       let (words, table) = Sym.put "words" $ initialSymbolTable
+      let wordsType = Name words $ Just (Array TigerStr)
       let env = emptyEnv { sym = table
-                         , tEnv = (Env.pushScope [(words, Name words $ Just (Array TigerStr))]
+                         , tEnv = (Env.pushScope [(words, wordsType)]
                                                  (tEnv emptyEnv))
                          }
       let lenPos = newPos "" 1 5
@@ -239,6 +240,17 @@ spec = do
                                      (IntLiteral lenPos 5)
                                      (IntLiteral iniPos 0))
           `shouldBe` Left (undeclaredError Type dummyPos "number")
+      it "typeChecks if the array type is aliased" $ do
+        let (nouns, table') = Sym.put "nouns" $ sym env
+        let nounsType = Name nouns $ Just wordsType
+        let env' = env { sym = table'
+                       , tEnv = (Env.addBinding (nouns, nounsType) (tEnv env))
+                       }
+        typeCheck env' (ArrayCreation dummyPos
+                                      "nouns"
+                                      (IntLiteral lenPos 5)
+                                      (StringLiteral iniPos ""))
+          `shouldBe` Right (env', Name nouns (Just $ wordsType))
     describe "typeCheck RecordCreation" $ do
       let (person, table) = Sym.put "person" $ initialSymbolTable
       let personType = Name person $ Just (Record [("name", TigerStr), ("age", TigerInt)])
@@ -286,6 +298,18 @@ spec = do
                                       , ("age", IntLiteral f2Pos 21)
                                       ])
           `shouldBe` Left (undeclaredError Type dummyPos "alien")
+      it "typeChecks if the record type is aliased" $ do
+        let (human, table') = Sym.put "human" $ sym env
+        let humanType = Name human $ Just personType
+        let env' = env { sym = table'
+                       , tEnv = Env.addBinding (human, humanType) (tEnv env)
+                       }
+        typeCheck env' (RecordCreation dummyPos
+                                      "human"
+                                      [ ("name", StringLiteral f1Pos "John")
+                                      , ("age", IntLiteral f2Pos 21)
+                                      ])
+          `shouldBe` Right (env', humanType)
     describe "typeCheck LValueExp Id" $ do
       it "returns the type of the atom" $ do
         let (x, table) = Sym.put "x" initialSymbolTable
@@ -340,6 +364,21 @@ spec = do
         typeCheck env (LValExp dummyPos $ RecordAccess (RecordAccess (Id "person") "pet")
                                                        "breed")
           `shouldBe` Right (env, TigerStr)
+      it "handles aliased record types" $ do
+        let (person, table) = Sym.put "person" initialSymbolTable
+        let personType = Name person $ Just (Record [("name", TigerStr), ("age", TigerInt)])
+        let (human, table') = Sym.put "human" table
+        let humanType = Name human $ Just personType
+        let env = emptyEnv { sym = table'
+                           , vEnv = Env.pushScope [(human, humanType)]
+                                                  (vEnv emptyEnv)
+                           , tEnv = Env.pushScope [ (human, humanType)
+                                                  , (person, personType)
+                                                  ]
+                                                  (tEnv emptyEnv)
+                           }
+        typeCheck env (LValExp dummyPos $ RecordAccess (Id "human") "name")
+          `shouldBe` Right (env, TigerStr)
     describe "typeCheck LValue ArraySubscript" $ do
       let (words, table) = Sym.put "words" $ initialSymbolTable
       let arrayType = Name words $ Just (Array TigerStr)
@@ -383,6 +422,18 @@ spec = do
                                                                (IntLiteral subPos 2))
                                                (IntLiteral subPos 3)))
           `shouldBe` Right (env, TigerInt)
+      it "handles aliased array types" $ do
+        let (nouns, table') = Sym.put "nouns" $ sym env
+        let nounsType = Name nouns $ Just arrayType
+        let env = emptyEnv { sym = table'
+                           , vEnv = Env.pushScope [(nouns, nounsType)] (vEnv emptyEnv)
+                           , tEnv = Env.pushScope [ (nouns, nounsType)
+                                                  , (words, arrayType)
+                                                  ]
+                                                  (tEnv emptyEnv)
+                           }
+        typeCheck env (LValExp dummyPos $ ArraySubscript (Id "nouns") (IntLiteral subPos 1))
+          `shouldBe` Right (env, TigerStr)
     describe "nested record and array access" $ do
       let (people, table) = Sym.put "people" initialSymbolTable
       let (person, table') = Sym.put "person" table

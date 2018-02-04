@@ -101,11 +101,15 @@ checkArray :: TypeEnv ->
 checkArray env pos name lengthExp initExp =
     (lookupType env name pos) >>= checkArrayType >>= checkLengthExp >>= checkScalarExp
     where checkArrayType typ@(_, Name _ (Just (Array _))) = Right typ
+          checkArrayType alias@(env', Name _ (Just typ@(Name _ _))) =
+            const alias <$> checkArrayType (env', typ)
           checkArrayType mismatch = Left $ typeError pos [Array Unit] (Right mismatch)
           checkLengthExp (ev, arrType) =
-            (\(ev', _) -> (ev', arrType)) <$> verifyType ev TigerInt lengthExp
+            (fmap . fmap) (const arrType) $ verifyType ev TigerInt lengthExp
           checkScalarExp typ@(ev, arrType@((Name _ (Just (Array expected))))) =
-            (\(ev', _) -> (ev', arrType)) <$> verifyType ev expected initExp
+            (fmap . fmap) (const arrType) $ verifyType ev expected initExp
+          checkScalarExp (ev, alias@((Name _ (Just arrTyp@(Name _ _))))) =
+            (fmap . fmap) (const alias) $ checkScalarExp (ev, arrTyp)
 
 checkRecord :: TypeEnv
                -> SourcePos
@@ -115,6 +119,8 @@ checkRecord :: TypeEnv
 checkRecord env pos name fields =
     (lookupType env name pos) >>= checkRecordType >>= verifyTypesPresent >>= checkFieldsTypes
     where checkRecordType typ@(_, Name _ (Just (Record _))) = Right typ
+          checkRecordType (env', alias@(Name _ (Just typ@(Name _ _)))) =
+            (fmap . fmap) (const alias) $ checkRecordType (env', typ)
           checkRecordType mismatch = Left $ typeError pos [Record []] (Right mismatch)
           verifyTypesPresent typ@(_, Name _ (Just (Record typeFields))) =
             let actualFields = sort (fst <$> fields)
@@ -125,11 +131,15 @@ checkRecord env pos name fields =
                            (mconcat $ intersperse ", " (show <$> expectedFields)) ++
                            "But got " ++
                            (mconcat $ intersperse ", " (show <$> actualFields))
+          verifyTypesPresent (env', alias@(Name _ (Just typ@(Name _ _)))) =
+            (fmap . fmap) (const alias) $ verifyTypesPresent (env', typ)
           checkFieldsTypes typ@(_, Name _ (Just (Record typeFields))) =
             let exps = snd <$> (sortBy (comparing fst) fields)
                 types = snd <$> (sortBy (comparing fst ) typeFields)
             in const typ <$>
                foldM (\(e', _) (exp, typ) -> verifyType e' typ exp) typ (zip exps types)
+          checkFieldsTypes (env', alias@(Name _ (Just typ@(Name _ _)))) =
+            (fmap . fmap) (const alias) $ checkFieldsTypes (env', typ)
 
 
 checkRecordAccess :: TypeEnv
@@ -147,6 +157,7 @@ checkRecordAccess env pos (ArraySubscript array exp) field =
 recordFields :: SourcePos -> (TypeEnv, ProgramType) -> Either TypeError (TypeEnv, [(Atom, ProgramType)])
 recordFields pos (env, (Record fields)) = Right (env, fields)
 recordFields pos (env, (Name _ (Just (Record fields)))) = Right (env, fields)
+recordFields pos (env, (Name _ (Just typ@(Name _ _)))) = recordFields pos (env, typ)
 recordFields pos mismatch = Left $ typeError pos [Record []] (Right mismatch)
 
 recordFieldType :: SourcePos -> Atom -> (TypeEnv, [(Atom, ProgramType)]) -> Either TypeError (TypeEnv, ProgramType)
@@ -176,8 +187,9 @@ arrayElementType :: TypeEnv ->
 arrayElementType env pos lval = typeCheck env (LValExp pos lval) >>= scalarType pos
 
 scalarType :: SourcePos -> (TypeEnv, ProgramType) -> Either TypeError (TypeEnv, ProgramType)
-scalarType _ (env', Array typ) = Right (env', typ)
-scalarType _ (env', Name _ (Just (Array typ))) = Right (env', typ)
+scalarType _ (env, Array typ) = Right (env, typ)
+scalarType _ (env, Name _ (Just (Array typ))) = Right (env, typ)
+scalarType pos (env, Name _ (Just typ@(Name _ _))) = scalarType pos (env, typ)
 scalarType pos mismatch = Left $ typeError pos [Array Unit] (Right mismatch)
 
 declareType :: TypeEnv
