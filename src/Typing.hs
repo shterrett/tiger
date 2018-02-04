@@ -7,6 +7,8 @@ import Data.Either (isLeft)
 import Data.Ord (comparing)
 import TigerTypes ( Expression(..)
                   , LValue(..)
+                  , Declaration(..)
+                  , Type(..)
                   , Operator(..)
                   , TypeName
                   , position
@@ -71,6 +73,7 @@ typeCheck e (RecordCreation pos name fields) = checkRecord e pos name fields
 typeCheck e (LValExp pos (Id name)) = lookupValue e name pos
 typeCheck e (LValExp pos (RecordAccess record field)) = checkRecordAccess e pos record field
 typeCheck e (LValExp pos (ArraySubscript arr sub)) = checkArraySubscript e pos arr sub
+typeCheck e (DecExp pos (TypeDec name typ)) = declareType e pos name typ
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -176,6 +179,41 @@ scalarType :: SourcePos -> (TypeEnv, ProgramType) -> Either TypeError (TypeEnv, 
 scalarType _ (env', Array typ) = Right (env', typ)
 scalarType _ (env', Name _ (Just (Array typ))) = Right (env', typ)
 scalarType pos mismatch = Left $ typeError pos [Array Unit] (Right mismatch)
+
+declareType :: TypeEnv
+               -> SourcePos
+               -> TypeName
+               -> Type
+               -> Either TypeError (TypeEnv, ProgramType)
+declareType env pos name (TypeId typeName) =
+    addTypeBinding name id <$> lookupType env typeName pos
+declareType env pos name (ArrayOf typeName) =
+    addTypeBinding name Array <$> lookupType env typeName pos
+declareType env pos name (RecordOf fields) =
+    (addTypeBinding name id) <$>
+    ((,) env) <$>
+    Record <$>
+    recordTypeFields
+    where recordTypeFields = sequence $
+                            (\(fieldName, typeName) ->
+                              ((,) fieldName) . snd <$>
+                               (lookupType env typeName pos)) <$>
+                            fields
+
+addTypeBinding :: TypeName ->
+                  (ProgramType -> ProgramType) ->
+                  (TypeEnv, ProgramType) ->
+                  (TypeEnv, ProgramType)
+addTypeBinding name aggregateConstructor (env, typ) =
+    let
+      (symbol, tbl) = Sym.put name (sym env)
+      newType = Name symbol $ Just (aggregateConstructor typ)
+    in
+     ( env { tEnv = Env.addBinding (symbol, newType) (tEnv env)
+           , sym = tbl
+           }
+     , Unit
+     )
 
 verifyType :: TypeEnv
               -> ProgramType

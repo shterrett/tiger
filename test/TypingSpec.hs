@@ -5,7 +5,12 @@ import Data.List (nub)
 import Data.Maybe (catMaybes)
 import qualified Environment as Env
 import qualified Symbol as Sym
-import TigerTypes (Expression(..), Operator(..), LValue(..))
+import TigerTypes ( Expression(..)
+                  , Operator(..)
+                  , LValue(..)
+                  , Declaration(..)
+                  , Type(..)
+                  )
 import Text.Parsec.Pos (initialPos, newPos)
 import Typing
 
@@ -426,3 +431,54 @@ spec = do
                                                         (RecordAccess (Id "person")
                                                                       "age"))))
           `shouldBe` Right (env, personType)
+    describe "typeCheck type declaration" $ do
+      it "puts the new type in the environment" $ do
+        let (name, expectedTable) = Sym.put "name" $ sym emptyEnv
+        let nameType = Name name (Just TigerStr)
+        let expectedEnv = emptyEnv { tEnv = Env.addBinding (name, nameType)
+                                                           (tEnv emptyEnv)
+                                   , sym = expectedTable
+                                   }
+        typeCheck emptyEnv (DecExp dummyPos
+                                   (TypeDec "name" (TypeId "string")))
+          `shouldBe` Right (expectedEnv, Unit)
+      it "puts the name type in the environment for a custom type" $ do
+        let (person, table) = Sym.put "person" $ sym emptyEnv
+        let personType = Name person $ Just (Record [ ("first_name", TigerStr)
+                                                    , ("age", TigerInt)
+                                                    ])
+        let env = emptyEnv { tEnv = Env.addBinding (person, personType) (tEnv emptyEnv)
+                           , sym = table
+                           }
+        let (human, expectedTable) = Sym.put "human" $ sym env
+        let humanType = Name human $ Just personType
+        let expectedEnv = env { tEnv = Env.addBinding (human, humanType) (tEnv env)
+                              , sym = expectedTable
+                              }
+        typeCheck env (DecExp dummyPos
+                              (TypeDec "human" (TypeId "person")))
+          `shouldBe` Right (expectedEnv, Unit)
+      it "constructs a custom array type" $ do
+        let (numbers, table) = Sym.put "numbers" $ sym emptyEnv
+        let numbersType = Name numbers $ Just (Array TigerInt)
+        let expectedEnv = emptyEnv { tEnv = Env.addBinding (numbers, numbersType)
+                                                           (tEnv emptyEnv)
+                                   , sym = table
+                                   }
+        typeCheck emptyEnv (DecExp dummyPos
+                                   (TypeDec "numbers" (ArrayOf "int")))
+          `shouldBe` Right (expectedEnv, Unit)
+      it "constructs a custom record type" $ do
+        let (person, table) = Sym.put "person" $ sym emptyEnv
+        let personType = Name person $ Just (Record [ ("first_name", TigerStr)
+                                                    , ("age", TigerInt)
+                                                    ])
+        let expectedEnv = emptyEnv { tEnv = Env.addBinding (person, personType)
+                                                           (tEnv emptyEnv)
+                                   , sym = table
+                                   }
+        typeCheck emptyEnv (DecExp dummyPos
+                                   (TypeDec "person" (RecordOf [ ("first_name", "string")
+                                                               , ("age", "int")
+                                                               ])))
+          `shouldBe` Right (expectedEnv, Unit)
