@@ -81,6 +81,9 @@ typeCheck e (LValExp pos (ArraySubscript arr sub)) = checkArraySubscript e pos a
 typeCheck e (DecExp pos (TypeDec name typ)) = declareType e pos name typ
 typeCheck e (DecExp pos (VarDec name typ exp)) = declareVariable e pos name typ exp
 typeCheck e (DecExp pos (FnDec name fields retTyp body)) = declareFn e pos name fields retTyp body
+typeCheck e (Assignment pos (Id var) exp) = checkVariableAssignment e pos var exp
+typeCheck e (Assignment pos (ArraySubscript arr sub) exp) = checkArrayAssignment e pos arr sub exp
+typeCheck e (Assignment pos (RecordAccess rec field) exp) = checkRecordAssignment e pos rec field exp
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -305,6 +308,38 @@ argTypes pos e fields =
     (zip $ fmap fst fields) <$>
     fmap snd <$>
     mapM (\(_, typName) -> lookupType e typName pos) fields
+
+checkVariableAssignment :: TypeEnv ->
+                           SourcePos ->
+                           Atom ->
+                           Expression ->
+                           Either TypeError (TypeEnv, ProgramType)
+checkVariableAssignment e pos var exp =
+      lookupValue e var pos >>= checkAssignment exp
+
+checkArrayAssignment :: TypeEnv ->
+                        SourcePos ->
+                        LValue ->
+                        Expression ->
+                        Expression ->
+                        Either TypeError (TypeEnv, ProgramType)
+checkArrayAssignment e pos arr sub exp =
+      checkArraySubscript e pos arr sub >>= checkAssignment exp
+
+checkRecordAssignment :: TypeEnv ->
+                         SourcePos ->
+                         LValue ->
+                         Atom ->
+                         Expression ->
+                         Either TypeError (TypeEnv, ProgramType)
+checkRecordAssignment e pos rec field exp =
+      checkRecordAccess e pos rec field >>= checkAssignment exp
+
+checkAssignment :: Expression ->
+                   (TypeEnv, ProgramType) ->
+                   Either TypeError (TypeEnv, ProgramType)
+checkAssignment exp (e', expected) =
+    (fmap . fmap) (const Unit) $ verifyType e' expected exp
 
 verifyType :: TypeEnv
               -> ProgramType

@@ -646,3 +646,70 @@ spec = do
         let (Just (Function types retTyp)) = Env.lookup five (vEnv actEnv)
         types `shouldBe` []
         retTyp `shouldBe` TigerInt
+    describe "typeCheck assignment" $ do
+      describe "assigning to a variable" $ do
+        let (x, table) = Sym.put "x" $ sym emptyEnv
+        let env = emptyEnv { vEnv = Env.addBinding (x, TigerInt) (vEnv emptyEnv)
+                           , sym = table
+                           }
+        let expPos = newPos "" 1 5
+
+        it "returns the Unit type" $ do
+          typeCheck env (Assignment dummyPos (Id "x") (IntLiteral expPos 5))
+            `shouldBe` Right (env, Unit)
+        it "returns an error if the variable is not declared" $ do
+          typeCheck env (Assignment dummyPos (Id "y") (IntLiteral expPos 5))
+            `shouldBe` Left (undeclaredError Identifier dummyPos "y")
+        it "returns an error if the expression type does not match the variable type" $ do
+          typeCheck env (Assignment dummyPos (Id "x") (StringLiteral expPos "hi!"))
+            `shouldBe` Left (typeError expPos [TigerInt] $ Right (env, TigerStr))
+      describe "assigning to an array subscript" $ do
+        let (numbers, table) = Sym.put "numbers" $ sym emptyEnv
+        let numbersType = Name numbers $ Just (Array TigerInt)
+        let env = emptyEnv { vEnv = Env.addBinding (numbers, numbersType) (vEnv emptyEnv)
+                           , sym = table
+                           }
+        let subPos = newPos "" 1 2
+        let expPos = newPos "" 1 5
+        it "returns the Unit type" $ do
+          typeCheck env (Assignment dummyPos
+                                    (ArraySubscript (Id "numbers")
+                                                    (IntLiteral subPos 5))
+                                    (IntLiteral expPos 10))
+            `shouldBe` Right (env, Unit)
+        it "returns an error if the array is not declared" $ do
+          typeCheck env (Assignment dummyPos
+                                    (ArraySubscript (Id "words")
+                                                    (IntLiteral subPos 5))
+                                    (StringLiteral expPos "Hi!"))
+            `shouldBe` Left (undeclaredError Identifier dummyPos "words")
+        it "returns an error if the expression type does not match the array type" $ do
+          typeCheck env (Assignment dummyPos
+                                    (ArraySubscript (Id "numbers")
+                                                    (IntLiteral subPos 5))
+                                    (StringLiteral expPos "Hi!"))
+            `shouldBe` Left (typeError expPos [TigerInt] $ Right (env, TigerStr))
+      describe "assigning to record access" $ do
+        let (person, table) = Sym.put "person" $ sym emptyEnv
+        let personType = Name person $ Just (Record [ ("first_name", TigerStr)
+                                                    , ("age", TigerInt)
+                                                    ])
+        let env = emptyEnv { vEnv = Env.addBinding (person, personType) (vEnv emptyEnv)
+                           , sym = table
+                           }
+        let expPos = newPos "" 1 5
+        it "returns the Unit type" $ do
+          typeCheck env (Assignment dummyPos
+                                    (RecordAccess (Id "person") "first_name")
+                                    (StringLiteral expPos "Hugh"))
+            `shouldBe` Right (env, Unit)
+        it "returns an error if the record is not defined" $ do
+          typeCheck env (Assignment dummyPos
+                                    (RecordAccess (Id "human") "first_name")
+                                    (StringLiteral expPos "Hugh"))
+            `shouldBe` Left (undeclaredError Identifier dummyPos "human")
+        it "returns an error if the expression type does not match the field type" $ do
+          typeCheck env (Assignment dummyPos
+                                    (RecordAccess (Id "person") "age")
+                                    (StringLiteral expPos "Hugh"))
+            `shouldBe` Left (typeError expPos [TigerInt] $ Right (env, TigerStr))
