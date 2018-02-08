@@ -713,3 +713,31 @@ spec = do
                                     (RecordAccess (Id "person") "age")
                                     (StringLiteral expPos "Hugh"))
             `shouldBe` Left (typeError expPos [TigerInt] $ Right (env, TigerStr))
+    describe "typeCheck function call" $ do
+      let (add, table) = Sym.put "add" $ sym emptyEnv
+      let addType = Function [TigerInt, TigerInt] TigerInt
+      let env = emptyEnv { vEnv = Env.addBinding (add, addType) (vEnv emptyEnv)
+                          , sym = table
+                          }
+      let pos1 = newPos "" 1 5
+      let pos2 = newPos "" 1 10
+      it "returns the return type of the function" $ do
+        let Right (_, typ) =
+              typeCheck env (FunctionCall dummyPos "add" [(IntLiteral pos1 5), (IntLiteral pos2 6)])
+        typ `shouldBe` TigerInt
+      it "fails if the function is not defined" $ do
+        typeCheck env (FunctionCall dummyPos "subtract" [(IntLiteral pos1 5), (IntLiteral pos2 6)])
+          `shouldBe` Left (undeclaredError Identifier dummyPos "subtract")
+      it "fails if the identifier type is not a function" $ do
+        let (word, table') = Sym.put "word" $ sym emptyEnv
+        let env' = env { vEnv = Env.addBinding (word, TigerStr) (vEnv emptyEnv)
+                       , sym = table'
+                       }
+        typeCheck env' (FunctionCall dummyPos "word" [(IntLiteral pos1 5), (IntLiteral pos2 6)])
+          `shouldBe` Left (typeError dummyPos [Function [] Unit] $ Right (env, TigerStr))
+      it "fails if the number of arguments is incorrect" $ do
+        typeCheck env (FunctionCall dummyPos "add" [(IntLiteral pos1 5)])
+          `shouldBe` Left "Incorrect number of arguments: expected 2 given 1"
+      it "fails if the arguments do not match the types of the parameters" $ do
+        typeCheck env (FunctionCall dummyPos "add" [(IntLiteral pos1 5), (StringLiteral pos2 "Hi")])
+          `shouldBe` Left (typeError pos2 [TigerInt] $ Right (env, TigerStr))

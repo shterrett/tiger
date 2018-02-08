@@ -84,6 +84,7 @@ typeCheck e (DecExp pos (FnDec name fields retTyp body)) = declareFn e pos name 
 typeCheck e (Assignment pos (Id var) exp) = checkVariableAssignment e pos var exp
 typeCheck e (Assignment pos (ArraySubscript arr sub) exp) = checkArrayAssignment e pos arr sub exp
 typeCheck e (Assignment pos (RecordAccess rec field) exp) = checkRecordAssignment e pos rec field exp
+typeCheck e (FunctionCall pos fn exps) = checkFunctionCall e pos fn exps
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -340,6 +341,32 @@ checkAssignment :: Expression ->
                    Either TypeError (TypeEnv, ProgramType)
 checkAssignment exp (e', expected) =
     (fmap . fmap) (const Unit) $ verifyType e' expected exp
+
+checkFunctionCall :: TypeEnv ->
+                     SourcePos ->
+                     Atom ->
+                     [Expression] ->
+                     Either TypeError (TypeEnv, ProgramType)
+checkFunctionCall e pos fn args =
+    lookupValue e fn pos >>=
+    verifyIsFunction >>=
+    verifyNumArgs >>=
+    verifyArgTypes >>=
+    returnType
+    where verifyIsFunction res@(_, Function _ _) = Right res
+          verifyIsFunction mismatch = Left $ typeError pos [Function [] Unit] (Right mismatch)
+          verifyNumArgs res@(_, Function params _)
+            | length params == length args = Right res
+            | otherwise = Left $ "Incorrect number of arguments: expected " ++
+                          show (length params) ++
+                          " given " ++
+                          show (length args)
+          verifyArgTypes res@(_, Function params _) =
+            const res <$>
+              foldM (\(e', _) (paramType, argExp) -> verifyType e' paramType argExp)
+                    (e, Unit)
+                    (zip params args)
+          returnType (e, Function _ typ) = Right (e, typ)
 
 verifyType :: TypeEnv
               -> ProgramType
