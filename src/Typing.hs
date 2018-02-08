@@ -3,7 +3,7 @@ module Typing where
 import Text.Parsec.Pos (SourcePos)
 import Control.Monad (foldM)
 import Data.List (intersperse, foldr1, foldl', sortBy, sort)
-import Data.Either (isLeft)
+import Data.Maybe (fromMaybe)
 import Data.Ord (comparing)
 import TigerTypes ( Expression(..)
                   , LValue(..)
@@ -25,6 +25,7 @@ data ProgramType =
     | Nil
     | Unit
     | Name Sym.Symbol (Maybe ProgramType)
+    | Function [ProgramType] ProgramType
 
 instance Show ProgramType where
     show TigerInt = "Integer"
@@ -34,6 +35,9 @@ instance Show ProgramType where
     show Typing.Nil = "nil"
     show Unit = "()"
     show (Name name _) = show name
+    show (Function args return) = "fn" ++
+                                  "(" ++ show args ++ ")" ++
+                                  " : " ++ show return
 
 instance Eq ProgramType where
     (==) (TigerInt) (TigerInt) = True
@@ -48,6 +52,7 @@ data TypeEnv = TypeEnv { tEnv :: Env.Environment ProgramType
                        , sym :: Sym.SymbolTable
                        }
   deriving(Show, Eq)
+
 type TypeError = String
 
 data Declarable = Field
@@ -75,6 +80,7 @@ typeCheck e (LValExp pos (RecordAccess record field)) = checkRecordAccess e pos 
 typeCheck e (LValExp pos (ArraySubscript arr sub)) = checkArraySubscript e pos arr sub
 typeCheck e (DecExp pos (TypeDec name typ)) = declareType e pos name typ
 typeCheck e (DecExp pos (VarDec name typ exp)) = declareVariable e pos name typ exp
+typeCheck e (DecExp pos (FnDec name fields retTyp body)) = declareFn e pos name fields retTyp body
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -251,6 +257,56 @@ addVarBinding name (env, typ) =
             }
       , Unit
       )
+
+addVarScope :: TypeEnv -> [(Atom, ProgramType)] -> TypeEnv
+addVarScope env typs =
+    let
+      initial = Sym.put "nil" (sym env)
+      atomsAndTables = scanr (\(name, _) (_, tbl')-> Sym.put name tbl') initial typs
+      table' = snd $ head atomsAndTables
+      atomsAndTypes = zip (fst <$> atomsAndTables) (snd <$> typs)
+    in env { vEnv = Env.pushScope atomsAndTypes (vEnv env)
+           , sym = table'
+           }
+
+declareFn :: TypeEnv
+             -> SourcePos
+             -> Atom
+             -> [(Atom, TypeName)]
+             -> Maybe TypeName
+             -> Expression
+             -> Either TypeError (TypeEnv, ProgramType)
+declareFn e pos name fields (Just retTyp) body =
+    let
+      args = argTypes pos e fields
+      returnType = snd <$> lookupType e retTyp pos
+      verifyReturnType = \(e', rt) -> verifyType e' rt body
+      fnTyp = Function <$> ((fmap . fmap) snd args) <*> returnType
+    in
+      addVarBinding name <$>
+      (
+        ((((,) <$> (addVarScope e <$> args)) <*> returnType)) >>=
+        verifyReturnType >>
+        ((,) e) <$> fnTyp
+      )
+declareFn e pos name fields Nothing body =
+    let
+      args = argTypes pos e fields
+      fnTyp = (flip Function $ Unit) <$> ((fmap . fmap) snd args)
+    in
+      addVarBinding name <$>
+      (
+        ((addVarScope e <$> args) >>= (flip typeCheck $ body)) >>
+        ((,) e) <$> fnTyp
+      )
+
+
+
+argTypes :: SourcePos -> TypeEnv -> [(Atom, TypeName)] -> Either TypeError [(Atom, ProgramType)]
+argTypes pos e fields =
+    (zip $ fmap fst fields) <$>
+    fmap snd <$>
+    mapM (\(_, typName) -> lookupType e typName pos) fields
 
 verifyType :: TypeEnv
               -> ProgramType
