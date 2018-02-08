@@ -74,6 +74,7 @@ typeCheck e (LValExp pos (Id name)) = lookupValue e name pos
 typeCheck e (LValExp pos (RecordAccess record field)) = checkRecordAccess e pos record field
 typeCheck e (LValExp pos (ArraySubscript arr sub)) = checkArraySubscript e pos arr sub
 typeCheck e (DecExp pos (TypeDec name typ)) = declareType e pos name typ
+typeCheck e (DecExp pos (VarDec name typ exp)) = declareVariable e pos name typ exp
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -226,6 +227,30 @@ addTypeBinding name aggregateConstructor (env, typ) =
            }
      , Unit
      )
+
+declareVariable :: TypeEnv
+                   -> SourcePos
+                   -> Atom
+                   -> Maybe TypeName
+                   -> Expression
+                   -> Either TypeError (TypeEnv, ProgramType)
+declareVariable e pos name Nothing exp =
+    addVarBinding name <$> typeCheck e exp
+declareVariable e pos name (Just typName) exp =
+    addVarBinding name <$>
+      (lookupType e typName pos >>= verifyType' exp)
+    where verifyType' exp (e', typ) = verifyType e' typ exp
+
+addVarBinding :: Atom -> (TypeEnv, ProgramType) -> (TypeEnv, ProgramType)
+addVarBinding name (env, typ) =
+    let
+      (symbol, tbl) = Sym.put name (sym env)
+    in
+      ( env { vEnv = Env.addBinding (symbol, typ) (vEnv env)
+            , sym = tbl
+            }
+      , Unit
+      )
 
 verifyType :: TypeEnv
               -> ProgramType

@@ -533,3 +533,26 @@ spec = do
                                                                , ("age", "int")
                                                                ])))
           `shouldBe` Right (expectedEnv, Unit)
+    describe "typeCheck variable declaration" $ do
+      it "sets the variable in the value environment to the type of the expression" $ do
+        let (x, table) = Sym.put "x" $ sym emptyEnv
+        let expectedEnv = emptyEnv { vEnv = Env.addBinding (x, TigerInt) (vEnv emptyEnv)
+                                   , sym = table
+                                   }
+        typeCheck emptyEnv (DecExp dummyPos (VarDec "x" Nothing (IntLiteral dummyPos 5)))
+          `shouldBe` Right (expectedEnv, Unit)
+      it "sets the variable to the expression type when it matches the provided type" $ do
+        let (x, table) = Sym.put "x" $ sym emptyEnv
+        let expectedEnv = emptyEnv { vEnv = Env.addBinding (x, TigerInt) (vEnv emptyEnv)
+                                   , sym = table
+                                   }
+        typeCheck emptyEnv (DecExp dummyPos (VarDec "x" (Just "int") (IntLiteral dummyPos 5)))
+          `shouldBe` Right (expectedEnv, Unit)
+      it "returns an error if the expression does not match the provided type" $ do
+        let expPos = newPos "" 1 5
+        let (x, table) = Sym.put "x" $ sym emptyEnv
+        let expectedEnv = emptyEnv { vEnv = Env.addBinding (x, TigerInt) (vEnv emptyEnv)
+                                   , sym = table
+                                   }
+        typeCheck emptyEnv (DecExp dummyPos (VarDec "x" (Just "string") (IntLiteral expPos 5)))
+          `shouldBe` Left (typeError expPos [TigerStr] (Right $ (emptyEnv, TigerInt)))
