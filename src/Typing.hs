@@ -300,8 +300,6 @@ declareFn e pos name fields Nothing body =
         ((,) e) <$> fnTyp
       )
 
-
-
 argTypes :: SourcePos -> TypeEnv -> [(Atom, TypeName)] -> Either TypeError [(Atom, ProgramType)]
 argTypes pos e fields =
     (zip $ fmap fst fields) <$>
