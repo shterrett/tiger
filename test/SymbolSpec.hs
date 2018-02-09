@@ -58,3 +58,9 @@ spec = do
       it "increments the integer with each addition" $ property prop_increments
       it "does not increment the value of a symbol if it exists in the table" $ property prop_no_double_increment
       it "returns the symbol with put" $ property prop_return_symbol
+      it "returns the existing symbol with put when a 'duplicate' is put" $ do
+        let tbl = Symbol.newTable 0
+        let (x, tbl') = Symbol.put "x" tbl
+        let (y, tbl'') = Symbol.put "y" tbl'
+        let (x', _) = Symbol.put "x" tbl''
+        x `shouldBe` x'

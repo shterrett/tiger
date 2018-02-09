@@ -20,12 +20,14 @@ newTable :: Integer -> SymbolTable
 newTable i = SymbolTable (Map.empty, i)
 
 put :: String -> SymbolTable -> (Symbol, SymbolTable)
-put s (SymbolTable (m, i)) = let sym = Symbol s i
-                             in ( sym
-                                , SymbolTable ( Map.insertWith (flip const) s sym m
-                                              , i + 1
-                                              )
-                                )
+put s tbl@(SymbolTable (m, i)) =
+    case Map.lookup s m of
+      Just sym -> (sym, tbl)
+      Nothing -> ( Symbol s i
+                 , SymbolTable ( Map.insert s (Symbol s i) m
+                               , i + 1
+                               )
+                 )
 
 get :: String -> SymbolTable -> Maybe Symbol
 get s (SymbolTable (m, _)) = Map.lookup s m
