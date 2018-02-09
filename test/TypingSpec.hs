@@ -741,3 +741,49 @@ spec = do
       it "fails if the arguments do not match the types of the parameters" $ do
         typeCheck env (FunctionCall dummyPos "add" [(IntLiteral pos1 5), (StringLiteral pos2 "Hi")])
           `shouldBe` Left (typeError pos2 [TigerInt] $ Right (env, TigerStr))
+    describe "typeCheck if-then-else" $ do
+      let pos1 = newPos "" 1 5
+      let pos2 = newPos "" 2 5
+      let pos3 = newPos "" 3 5
+      it "returns the type of both branch expressions" $ do
+        typeCheck emptyEnv (IfThenElse dummyPos
+                                       (IntLiteral pos1 1)
+                                       (StringLiteral pos2 "hi")
+                                       (StringLiteral pos3 "bye"))
+          `shouldBe` Right (emptyEnv, TigerStr)
+      it "returns an error if the first expression is not an integer" $ do
+        typeCheck emptyEnv (IfThenElse dummyPos
+                                       (StringLiteral pos1 "false")
+                                       (StringLiteral pos2 "hi")
+                                       (StringLiteral pos3 "bye"))
+          `shouldBe` Left (typeError pos1 [TigerInt] (Right (emptyEnv, TigerStr)))
+      it "returns an error if the two branch expressions have different types" $ do
+        typeCheck emptyEnv (IfThenElse dummyPos
+                                       (IntLiteral pos1 1)
+                                       (IntLiteral pos2 5)
+                                       (StringLiteral pos3 "five"))
+          `shouldBe` Left (typeError pos3 [TigerInt] (Right (emptyEnv, TigerStr)))
+    describe "typeCheck if-then" $ do
+      let (print, table) = Sym.put "print" $ sym emptyEnv
+      let printType = Function [TigerStr] Unit
+      let env = emptyEnv { vEnv = Env.addBinding (print, printType) (vEnv emptyEnv)
+                          , sym = table
+                          }
+      let pos1 = newPos "" 1 5
+      let pos2 = newPos "" 2 5
+      let pos3 = newPos "" 2 10
+      it "returns the Unit type" $ do
+        let Right (_, typ) = typeCheck env (IfThen dummyPos
+                                           (IntLiteral pos1 1)
+                                           (FunctionCall pos2 "print" [StringLiteral pos3 "hi"]))
+        typ `shouldBe` Unit
+      it "returns an error if the first expression is not an integer" $ do
+        typeCheck env (IfThen dummyPos
+                              (StringLiteral pos1 "false")
+                              (FunctionCall pos2 "print" [StringLiteral pos3 "hi"]))
+          `shouldBe` Left (typeError pos1 [TigerInt] (Right (env, TigerStr)))
+      it "returns an error if the second expression does not return unit" $ do
+        typeCheck env (IfThen dummyPos
+                              (IntLiteral pos1 1)
+                              (StringLiteral pos2 "hi"))
+          `shouldBe` Left (typeError pos2 [Unit] (Right (env, TigerStr)))

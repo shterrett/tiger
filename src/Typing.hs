@@ -85,6 +85,8 @@ typeCheck e (Assignment pos (Id var) exp) = checkVariableAssignment e pos var ex
 typeCheck e (Assignment pos (ArraySubscript arr sub) exp) = checkArrayAssignment e pos arr sub exp
 typeCheck e (Assignment pos (RecordAccess rec field) exp) = checkRecordAssignment e pos rec field exp
 typeCheck e (FunctionCall pos fn exps) = checkFunctionCall e pos fn exps
+typeCheck e (IfThenElse pos bool truthy falsey) = checkIfThenElse e pos bool truthy falsey
+typeCheck e (IfThen pos bool truthy) = checkIfThen e pos bool truthy
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -367,6 +369,26 @@ checkFunctionCall e pos fn args =
                     (e, Unit)
                     (zip params args)
           returnType (e, Function _ typ) = Right (e, typ)
+
+checkIfThenElse :: TypeEnv ->
+                   SourcePos ->
+                   Expression ->
+                   Expression ->
+                   Expression ->
+                   Either TypeError (TypeEnv, ProgramType)
+checkIfThenElse e pos bool truthy falsey =
+    verifyType e TigerInt bool >>
+    typeCheck e truthy >>=
+    (\(_, typ) -> verifyType e typ falsey)
+
+checkIfThen :: TypeEnv ->
+               SourcePos ->
+               Expression ->
+               Expression ->
+               Either TypeError (TypeEnv, ProgramType)
+checkIfThen e pos bool truthy =
+    verifyType e TigerInt bool >>
+    verifyType e Unit truthy
 
 verifyType :: TypeEnv
               -> ProgramType
