@@ -832,3 +832,31 @@ spec = do
                            (IntLiteral pos2 9)
                            (StringLiteral pos3 "hi"))
           `shouldBe` Left (typeError pos3 [Unit] (Right (env, TigerStr)))
+    describe "typeCheck while loop" $ do
+      let (print, table) = Sym.put "print" $ sym emptyEnv
+      let printType = Function [TigerStr] Unit
+      let env = emptyEnv { vEnv = Env.addBinding (print, printType) (vEnv emptyEnv)
+                          , sym = table
+                          }
+      let pos1 = newPos "" 1 5
+      let pos2 = newPos "" 2 5
+      let pos3 = newPos "" 2 10
+      it "returns the unit type" $ do
+        let Right (_, typ) = typeCheck env (While dummyPos
+                                                  (IntLiteral pos1 1)
+                                                  (FunctionCall pos2
+                                                                "print"
+                                                                [StringLiteral pos3 "wheeee!"]))
+        typ `shouldBe` Unit
+      it "returns an error if the while expression is not an integer" $ do
+        typeCheck env (While dummyPos
+                             (StringLiteral pos1 "true")
+                             (FunctionCall pos2
+                                           "print"
+                                           [StringLiteral pos3 "wheeee!"]))
+          `shouldBe` Left (typeError pos1 [TigerInt] (Right (env, TigerStr)))
+      it "returns an error if the body returns a value" $ do
+        typeCheck env (While dummyPos
+                             (IntLiteral pos1 1)
+                             (StringLiteral pos2 "wheeee!"))
+          `shouldBe` Left (typeError pos2 [Unit] (Right (env, TigerStr)))

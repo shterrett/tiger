@@ -88,6 +88,7 @@ typeCheck e (FunctionCall pos fn exps) = checkFunctionCall e pos fn exps
 typeCheck e (IfThenElse pos bool truthy falsey) = checkIfThenElse e pos bool truthy falsey
 typeCheck e (IfThen pos bool truthy) = checkIfThen e pos bool truthy
 typeCheck e (For pos idx fm to body) = checkFor e pos idx fm to body
+typeCheck e (While pos bool body) = checkWhile e pos bool body
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -402,6 +403,16 @@ checkFor e pos idx fm to body =
     verifyType e TigerInt fm >>
     verifyType e TigerInt to >>
     const (e, Unit) <$> verifyType (addVarScope e [(idx, TigerInt)]) Unit body
+
+checkWhile :: TypeEnv ->
+              SourcePos ->
+              Expression ->
+              Expression ->
+              Either TypeError (TypeEnv, ProgramType)
+checkWhile e pos bool body =
+    verifyType e TigerInt bool >>
+    const (e, Unit) <$> verifyType e Unit body
+
 
 verifyType :: TypeEnv
               -> ProgramType
