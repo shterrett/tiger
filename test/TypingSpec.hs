@@ -787,3 +787,48 @@ spec = do
                               (IntLiteral pos1 1)
                               (StringLiteral pos2 "hi"))
           `shouldBe` Left (typeError pos2 [Unit] (Right (env, TigerStr)))
+    describe "typeCheck for loop" $ do
+      let (print, table) = Sym.put "print" $ sym emptyEnv
+      let printType = Function [TigerInt] Unit
+      let env = emptyEnv { vEnv = Env.addBinding (print, printType) (vEnv emptyEnv)
+                          , sym = table
+                          }
+      let pos1 = newPos "" 1 5
+      let pos2 = newPos "" 1 10
+      let pos3 = newPos "" 3 5
+      let pos4 = newPos "" 3 10
+      it "returns the unit type" $ do
+        let Right (env', typ) = typeCheck env (For dummyPos
+                                               "i"
+                                               (IntLiteral pos1 0)
+                                               (IntLiteral pos2 9)
+                                               (FunctionCall pos3
+                                                             "print"
+                                                             [LValExp pos4 (Id "i")]))
+        typ `shouldBe` Unit
+        Sym.get "i" (sym env') `shouldBe` Nothing
+      it "returns an error if the from expression is not integer" $ do
+        typeCheck env (For dummyPos
+                           "i"
+                           (StringLiteral pos1 "hi")
+                           (IntLiteral pos2 9)
+                           (FunctionCall pos3
+                                         "print"
+                                         [LValExp pos4 (Id "i")]))
+          `shouldBe` Left (typeError pos1 [TigerInt] (Right (env, TigerStr)))
+      it "returns an error if the to expression is not integer" $ do
+        typeCheck env (For dummyPos
+                           "i"
+                           (IntLiteral pos1 0)
+                           (StringLiteral pos2 "hi")
+                           (FunctionCall pos3
+                                         "print"
+                                         [LValExp pos4 (Id "i")]))
+          `shouldBe` Left (typeError pos2 [TigerInt] (Right (env, TigerStr)))
+      it "returns an error if the body returns a value" $ do
+        typeCheck env (For dummyPos
+                           "i"
+                           (IntLiteral pos1 0)
+                           (IntLiteral pos2 9)
+                           (StringLiteral pos3 "hi"))
+          `shouldBe` Left (typeError pos3 [Unit] (Right (env, TigerStr)))

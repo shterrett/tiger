@@ -87,6 +87,7 @@ typeCheck e (Assignment pos (RecordAccess rec field) exp) = checkRecordAssignmen
 typeCheck e (FunctionCall pos fn exps) = checkFunctionCall e pos fn exps
 typeCheck e (IfThenElse pos bool truthy falsey) = checkIfThenElse e pos bool truthy falsey
 typeCheck e (IfThen pos bool truthy) = checkIfThen e pos bool truthy
+typeCheck e (For pos idx fm to body) = checkFor e pos idx fm to body
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -389,6 +390,18 @@ checkIfThen :: TypeEnv ->
 checkIfThen e pos bool truthy =
     verifyType e TigerInt bool >>
     verifyType e Unit truthy
+
+checkFor :: TypeEnv ->
+            SourcePos ->
+            Atom ->
+            Expression ->
+            Expression ->
+            Expression ->
+            Either TypeError (TypeEnv, ProgramType)
+checkFor e pos idx fm to body =
+    verifyType e TigerInt fm >>
+    verifyType e TigerInt to >>
+    const (e, Unit) <$> verifyType (addVarScope e [(idx, TigerInt)]) Unit body
 
 verifyType :: TypeEnv
               -> ProgramType
