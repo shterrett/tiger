@@ -67,6 +67,7 @@ typeCheck :: TypeEnv -> Expression -> Either TypeError (TypeEnv, ProgramType)
 typeCheck e (TigerTypes.Nil _) = Right (e, Typing.Nil)
 typeCheck e (ValuelessExpression _ _) = Right (e, Unit)
 typeCheck e (NoValue _) = Right (e, Unit)
+typeCheck e (Break _) = Right (e, Unit)
 typeCheck e (IntLiteral _ _) = Right (e, TigerInt)
 typeCheck e (StringLiteral _ _) = Right (e, TigerStr)
 typeCheck e (Negation pos exp) = verifyType e TigerInt exp

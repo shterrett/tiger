@@ -53,6 +53,9 @@ spec = do
     describe "typeCheck NoValue" $ do
       it "types as Unit" $ do
         typeCheck emptyEnv (NoValue dummyPos) `shouldBe` Right (emptyEnv, Unit)
+    describe "typeCheck Break" $ do
+      it "typechecks as Unit" $ do
+        typeCheck emptyEnv (Break dummyPos) `shouldBe` Right (emptyEnv, Unit)
     describe "typeCheck IntLiteral" $ do
       it "types as TigerInt" $ do
         typeCheck emptyEnv (IntLiteral dummyPos 5) `shouldBe` Right (emptyEnv, TigerInt)
