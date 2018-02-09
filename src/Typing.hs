@@ -89,6 +89,7 @@ typeCheck e (IfThenElse pos bool truthy falsey) = checkIfThenElse e pos bool tru
 typeCheck e (IfThen pos bool truthy) = checkIfThen e pos bool truthy
 typeCheck e (For pos idx fm to body) = checkFor e pos idx fm to body
 typeCheck e (While pos bool body) = checkWhile e pos bool body
+typeCheck e (Let pos decs exps) = checkLet e pos decs exps
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -413,6 +414,21 @@ checkWhile e pos bool body =
     verifyType e TigerInt bool >>
     const (e, Unit) <$> verifyType e Unit body
 
+checkLet :: TypeEnv ->
+            SourcePos ->
+            [Declaration] ->
+            [Expression] ->
+            Either TypeError (TypeEnv, ProgramType)
+checkLet e pos decs exps =
+    (\(e', typ) -> (unscope e', typ)) <$>
+    (foldM (\(e', _) dec -> typeCheck e' (DecExp pos dec)) (scope e, Unit) decs >>=
+     (\(e', _) -> typeCheck e' (Sequence pos exps)))
+    where scope env = env { tEnv = Env.pushScope [] (tEnv env)
+                          , vEnv = Env.pushScope [] (vEnv env)
+                          }
+          unscope env = env { tEnv = Env.popScope (tEnv env)
+                            , vEnv = Env.popScope (vEnv env)
+                            }
 
 verifyType :: TypeEnv
               -> ProgramType
@@ -450,8 +466,8 @@ undeclaredError :: Declarable -> SourcePos -> Atom -> TypeError
 undeclaredError dec pos name =
     "Type Error! Undeclared " ++ (show dec) ++ ": " ++ name ++ " at " ++ show pos
 
-lookupTypeVal :: TypeEnv -> String -> (TypeEnv -> Env.Environment a) -> Maybe a
-lookupTypeVal env name getEnv = Sym.get name (sym env) >>= (lookup (getEnv env))
+lookupTypeVal :: Show a => TypeEnv -> String -> (TypeEnv -> Env.Environment a) -> Maybe a
+lookupTypeVal env name getEnv = Sym.get name (sym env) >>= lookup (getEnv env)
   where lookup = flip Env.lookup
 
 typeError :: SourcePos -> [ProgramType] -> Either TypeError (TypeEnv, ProgramType) -> TypeError

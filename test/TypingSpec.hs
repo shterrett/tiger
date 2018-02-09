@@ -860,3 +860,41 @@ spec = do
                              (IntLiteral pos1 1)
                              (StringLiteral pos2 "wheeee!"))
           `shouldBe` Left (typeError pos2 [Unit] (Right (env, TigerStr)))
+    describe "typeCheck let-in" $ do
+      let pos1 = newPos "" 1 5
+      let pos2 = newPos "" 2 5
+      let pos3 = newPos "" 3 5
+      let pos4 = newPos "" 4 5
+      let pos5 = newPos "" 5 5
+      let pos6 = newPos "" 6 5
+      let pos7 = newPos "" 7 5
+      let pos8 = newPos "" 8 5
+      it "returns the type returned by the body" $ do
+        let Right (env, typ) =
+              typeCheck emptyEnv
+                        (Let dummyPos
+                             [ (TypeDec "numbers" (ArrayOf "int"))
+                             , (VarDec "numbers"
+                                       (Just "numbers")
+                                       (ArrayCreation pos1
+                                                     "numbers"
+                                                     (IntLiteral pos2 5)
+                                                     (IntLiteral pos3 10)))
+                             , (FnDec "index"
+                                     [ ("input", "numbers")
+                                     , ("i", "int")
+                                     ]
+                                     (Just "int")
+                                     (LValExp pos4
+                                               (ArraySubscript (Id "input")
+                                                               (LValExp pos5 (Id "i")))))
+                             ]
+                             [ (FunctionCall pos6
+                                             "index"
+                                             [ (LValExp pos7 (Id "numbers"))
+                                             , (IntLiteral pos8 2)
+                                             ])
+                             ])
+        typ `shouldBe` TigerInt
+        (tEnv env) `shouldBe` (tEnv emptyEnv)
+        (vEnv env) `shouldBe` (vEnv emptyEnv)
