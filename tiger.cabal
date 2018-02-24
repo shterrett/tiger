@@ -49,6 +49,7 @@ test-suite tiger-test
                      , SymbolSpec
                      , EnvironmentSpec
                      , TypingSpec
+                     , TypingExampleSpec
   build-depends:       base
                      , tiger
                      , hspec

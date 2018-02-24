@@ -44,8 +44,22 @@ instance Eq ProgramType where
     (==) (TigerStr) (TigerStr) = True
     (==) Typing.Nil Typing.Nil = True
     (==) Unit Unit = True
-    (==) (Name n _) (Name m _) = n == m
+    (==) n@(Name _ _) m@(Name _ _) = cmpAliasTypes n m
+    (==) (Name _ (Just t1)) t2 = t1 == t2
+    (==) t1 (Name _ (Just t2)) = t1 == t2
     (==) _ _ = False
+
+cmpAliasTypes :: ProgramType -> ProgramType -> Bool
+cmpAliasTypes (Name m (Just (Array _))) (Name n _) = m == n
+cmpAliasTypes (Name m (Just (Record _))) (Name n _) = m == n
+cmpAliasTypes (Name m _) (Name n (Just (Array _))) = m == n
+cmpAliasTypes (Name m _) (Name n (Just (Record _))) = m == n
+cmpAliasTypes (Name m (Just t1)) (Name n (Just t2)) = if m == n
+                                                        then True
+                                                        else t1 == t2
+cmpAliasTypes (Name m _) (Name n _) = m == n
+
+
 
 data TypeEnv = TypeEnv { tEnv :: Env.Environment ProgramType
                        , vEnv :: Env.Environment ProgramType
@@ -62,6 +76,17 @@ instance Show Declarable where
     show Field = "field"
     show Identifier = "identifier"
     show Type = "type"
+
+mapEnv :: (TypeEnv -> TypeEnv) ->
+          Either TypeError (TypeEnv, ProgramType) ->
+          Either TypeError (TypeEnv, ProgramType)
+mapEnv _ res@(Left _) = res
+mapEnv f (Right (e, t)) = Right (f e, t)
+
+mapType :: (ProgramType -> ProgramType) ->
+           Either TypeError (TypeEnv, ProgramType) ->
+           Either TypeError (TypeEnv, ProgramType)
+mapType = fmap . fmap
 
 typeCheck :: TypeEnv -> Expression -> Either TypeError (TypeEnv, ProgramType)
 typeCheck e (TigerTypes.Nil _) = Right (e, Typing.Nil)
@@ -122,11 +147,11 @@ checkArray env pos name lengthExp initExp =
             const alias <$> checkArrayType (env', typ)
           checkArrayType mismatch = Left $ typeError pos [Array Unit] (Right mismatch)
           checkLengthExp (ev, arrType) =
-            (fmap . fmap) (const arrType) $ verifyType ev TigerInt lengthExp
+            mapType (const arrType) $ verifyType ev TigerInt lengthExp
           checkScalarExp typ@(ev, arrType@((Name _ (Just (Array expected))))) =
-            (fmap . fmap) (const arrType) $ verifyType ev expected initExp
+            mapType (const arrType) $ verifyType ev expected initExp
           checkScalarExp (ev, alias@((Name _ (Just arrTyp@(Name _ _))))) =
-            (fmap . fmap) (const alias) $ checkScalarExp (ev, arrTyp)
+            mapType (const alias) $ checkScalarExp (ev, arrTyp)
 
 checkRecord :: TypeEnv
                -> SourcePos
@@ -137,7 +162,7 @@ checkRecord env pos name fields =
     (lookupType env name pos) >>= checkRecordType >>= verifyTypesPresent >>= checkFieldsTypes
     where checkRecordType typ@(_, Name _ (Just (Record _))) = Right typ
           checkRecordType (env', alias@(Name _ (Just typ@(Name _ _)))) =
-            (fmap . fmap) (const alias) $ checkRecordType (env', typ)
+            mapType (const alias) $ checkRecordType (env', typ)
           checkRecordType mismatch = Left $ typeError pos [Record []] (Right mismatch)
           verifyTypesPresent typ@(_, Name _ (Just (Record typeFields))) =
             let actualFields = sort (fst <$> fields)
@@ -149,14 +174,14 @@ checkRecord env pos name fields =
                            "But got " ++
                            (mconcat $ intersperse ", " (show <$> actualFields))
           verifyTypesPresent (env', alias@(Name _ (Just typ@(Name _ _)))) =
-            (fmap . fmap) (const alias) $ verifyTypesPresent (env', typ)
+            mapType (const alias) $ verifyTypesPresent (env', typ)
           checkFieldsTypes typ@(_, Name _ (Just (Record typeFields))) =
             let exps = snd <$> (sortBy (comparing fst) fields)
                 types = snd <$> (sortBy (comparing fst ) typeFields)
             in const typ <$>
                foldM (\(e', _) (exp, typ) -> verifyType e' typ exp) typ (zip exps types)
           checkFieldsTypes (env', alias@(Name _ (Just typ@(Name _ _)))) =
-            (fmap . fmap) (const alias) $ checkFieldsTypes (env', typ)
+            mapType (const alias) $ checkFieldsTypes (env', typ)
 
 
 checkRecordAccess :: TypeEnv
@@ -268,6 +293,9 @@ addVarBinding name (env, typ) =
       , Unit
       )
 
+addVarBinding' :: Atom -> (TypeEnv, ProgramType) -> Either TypeError (TypeEnv, ProgramType)
+addVarBinding' a et = Right $ addVarBinding a et
+
 addVarScope :: TypeEnv -> [(Atom, ProgramType)] -> TypeEnv
 addVarScope env typs =
     let
@@ -279,6 +307,9 @@ addVarScope env typs =
            , sym = table'
            }
 
+popVarScope :: TypeEnv -> TypeEnv
+popVarScope env = env { vEnv = Env.popScope (vEnv env) }
+
 declareFn :: TypeEnv
              -> SourcePos
              -> Atom
@@ -287,28 +318,22 @@ declareFn :: TypeEnv
              -> Expression
              -> Either TypeError (TypeEnv, ProgramType)
 declareFn e pos name fields (Just retTyp) body =
-    let
-      args = argTypes pos e fields
-      returnType = snd <$> lookupType e retTyp pos
-      verifyReturnType = \(e', rt) -> verifyType e' rt body
-      fnTyp = Function <$> ((fmap . fmap) snd args) <*> returnType
-    in
-      addVarBinding name <$>
-      (
-        ((((,) <$> (addVarScope e <$> args)) <*> returnType)) >>=
-        verifyReturnType >>
-        ((,) e) <$> fnTyp
-      )
+    do
+      args <- argTypes pos e fields
+      (_, returnType) <- lookupType e retTyp pos
+      let fnTyp = Function (fmap snd args) returnType
+      let e' = (flip addVarScope $ args) . fst $ addVarBinding name (e, fnTyp)
+      mapType (const Unit) (
+        mapEnv popVarScope (
+          verifyType e' returnType body))
 declareFn e pos name fields Nothing body =
-    let
-      args = argTypes pos e fields
-      fnTyp = (flip Function $ Unit) <$> ((fmap . fmap) snd args)
-    in
-      addVarBinding name <$>
-      (
-        ((addVarScope e <$> args) >>= (flip typeCheck $ body)) >>
-        ((,) e) <$> fnTyp
-      )
+    do
+      args <- argTypes pos e fields
+      let fnTyp = Function (fmap snd args) Unit
+      let e' = (flip addVarScope $ args) . fst $ addVarBinding name (e, fnTyp)
+      mapType (const Unit) (
+        mapEnv popVarScope (
+          typeCheck e' body))
 
 argTypes :: SourcePos -> TypeEnv -> [(Atom, TypeName)] -> Either TypeError [(Atom, ProgramType)]
 argTypes pos e fields =
@@ -346,7 +371,7 @@ checkAssignment :: Expression ->
                    (TypeEnv, ProgramType) ->
                    Either TypeError (TypeEnv, ProgramType)
 checkAssignment exp (e', expected) =
-    (fmap . fmap) (const Unit) $ verifyType e' expected exp
+    mapType (const Unit) $ verifyType e' expected exp
 
 checkFunctionCall :: TypeEnv ->
                      SourcePos ->

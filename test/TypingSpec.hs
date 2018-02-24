@@ -566,6 +566,8 @@ spec = do
       let pos3 = newPos "" 2 10
 
       it "creates a value entry for the function type" $ do
+        let (_, table') = Sym.put "n" table
+        let (_, table'') = Sym.put "m" table'
         let Right (actEnv, Unit) =
               typeCheck emptyEnv (DecExp dummyPos
                                  (FnDec "add"
@@ -577,10 +579,43 @@ spec = do
                                                Addition
                                                (LValExp pos2 (Id "m"))
                                                (LValExp pos3 (Id "n")))))
-        (sym actEnv) `shouldBe` table
+        (sym actEnv) `shouldBe` table''
         (tEnv actEnv) `shouldBe` (tEnv emptyEnv)
         let (Just (Function types retTyp)) = Env.lookup add (vEnv actEnv)
         types `shouldBe` [TigerInt, TigerInt]
+        retTyp `shouldBe` TigerInt
+      it "makes the function type available in the body scope" $ do
+        let (factorial, table) = Sym.put "factorial" $ sym emptyEnv
+        let (_, table') = Sym.put "n" table
+        let pos4 = newPos "" 4 10
+        let pos5 = newPos "" 5 10
+        let pos6 = newPos "" 6 10
+        let pos7 = newPos "" 7 10
+        let pos8 = newPos "" 8 10
+        let pos9 = newPos "" 9 10
+        let Right (actEnv, Unit) =
+              typeCheck emptyEnv (DecExp dummyPos
+                                 (FnDec "factorial"
+                                        [ ("n", "int")
+                                        ]
+                                        (Just "int")
+                                        (IfThenElse pos1
+                                                    (BinOp pos2
+                                                           Equality
+                                                           (LValExp pos3 $ Id "n")
+                                                           (IntLiteral pos4 0))
+                                                    (IntLiteral pos5 1)
+                                                    (FunctionCall pos6
+                                                                  "factorial"
+                                                                  [BinOp pos7
+                                                                         Subtraction
+                                                                         (LValExp pos8 $ Id "n")
+                                                                         (IntLiteral pos9 1)]))))
+
+        (sym actEnv) `shouldBe` table'
+        (tEnv actEnv) `shouldBe` (tEnv emptyEnv)
+        let (Just (Function types retTyp)) = Env.lookup factorial (vEnv actEnv)
+        types `shouldBe` [TigerInt]
         retTyp `shouldBe` TigerInt
       it "fails if the body does not typecheck" $ do
         typeCheck emptyEnv (DecExp dummyPos
@@ -608,6 +643,8 @@ spec = do
           `shouldBe` Left (typeError pos1 [TigerStr] (Right (emptyEnv, TigerInt)))
       it ("does not enforce a body type when the return type is Nothing; " ++
           "it sets the return type as Unit") $ do
+        let (_, table') = Sym.put "n" table
+        let (_, table'') = Sym.put "m" table'
         let Right (actEnv, Unit) =
               typeCheck emptyEnv (DecExp dummyPos
                                  (FnDec "add"
@@ -619,7 +656,7 @@ spec = do
                                                Addition
                                                (LValExp pos2 (Id "m"))
                                                (LValExp pos3 (Id "n")))))
-        (sym actEnv) `shouldBe` table
+        (sym actEnv) `shouldBe` table''
         (tEnv actEnv) `shouldBe` (tEnv emptyEnv)
         let (Just (Function types retTyp)) = Env.lookup add (vEnv actEnv)
         types `shouldBe` [TigerInt, TigerInt]
