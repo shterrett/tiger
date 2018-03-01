@@ -492,7 +492,7 @@ verifyType :: TypeEnv
 verifyType env typ exp =
     case typeCheck env exp of
       res@(Right (env', act)) ->
-        if act == typ
+        if act == typ || act == Typing.Nil
         then Right (env', act)
         else Left $ typeError (position exp) [typ] res
       mismatch -> Left $ typeError (position exp) [typ] mismatch

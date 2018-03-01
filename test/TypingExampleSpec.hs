@@ -56,7 +56,6 @@ spec = do
         (fmap snd res) `shouldBe` Right TigerInt
       it "typechecks test 5" $ do
         res <- checkTest "test5.tig"
-        fmap snd res `shouldBe` Right TigerInt -- dummy
         let Right (env, typ) = res
         case Sym.get "intlist" (sym env) of
           Just intlist -> typ `shouldBe` Name intlist (Just $ Record [ ("hd", TigerInt)

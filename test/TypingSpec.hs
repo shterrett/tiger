@@ -94,12 +94,13 @@ spec = do
           (nub $ typ <$> operators)
             `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, TigerStr)]
         it "returns a mismatch error for the left expression when the both are not ints" $ do
+          let pos2 = newPos "" 2 1
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
-                                                 (TigerTypes.Nil dummyPos)
-                                                 (StringLiteral dummyPos "hello"))
+                                                 (StringLiteral dummyPos "hello")
+                                                 (StringLiteral pos2 "world"))
           (nub $ typ <$> operators)
-            `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, Typing.Nil)]
+            `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, TigerStr)]
       describe "comparison" $ do
         let operators = [Equality, NonEquality, LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual]
         it "types as TigerInt when all arguments are TigerInt" $ do
@@ -154,12 +155,13 @@ spec = do
           (nub $ typ <$> operators)
             `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, TigerStr)]
         it "returns a mismatch error for the left expression when the both are not ints" $ do
+          let pos2 = newPos "" 2 1
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
-                                                 (TigerTypes.Nil dummyPos)
-                                                 (StringLiteral dummyPos "hello"))
+                                                 (StringLiteral dummyPos "goodbye")
+                                                 (StringLiteral pos2 "hello"))
           (nub $ typ <$> operators)
-            `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, Typing.Nil)]
+            `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, TigerStr)]
     describe "typeCheck Grouped" $ do
       it "types as the type of the grouped expression" $ do
         typeCheck emptyEnv (Grouped dummyPos (IntLiteral dummyPos 5))
