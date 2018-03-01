@@ -197,3 +197,7 @@ spec = do
         res <- checkTest "test38.tig"
         let Left err = res
         err `shouldBe` "Multiple declarations of the same type: a at (line 4, column 1)"
+      it "typechecks test 39" $ do
+        res <- checkTest "test39.tig"
+        let Left err = res
+        err `shouldBe` "Multiple declarations of the same function: g at (line 4, column 1)"

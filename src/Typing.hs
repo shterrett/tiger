@@ -81,10 +81,12 @@ type TypeError = String
 data Declarable = Field
                | Identifier
                | Type
+               | Fn
 instance Show Declarable where
     show Field = "field"
     show Identifier = "identifier"
     show Type = "type"
+    show Fn = "function"
 
 mapEnv :: (TypeEnv -> TypeEnv) ->
           Either TypeError (TypeEnv, ProgramType) ->
@@ -459,6 +461,7 @@ checkLet :: TypeEnv ->
 checkLet e pos decs exps =
     (\(e', typ) -> (unscope e', typ)) <$>
     (uniqTypeDecs decs pos >>
+     uniqFnDecs decs pos >>
       (foldM (\(e', _) dec -> typeCheck e' (DecExp pos dec)) (initializeLetScope decs $ scope e, Unit) decs >>=
       (\(e', _) -> typeCheck e' (Sequence pos exps))))
     where scope env = env { tEnv = Env.pushScope [] (tEnv env)
@@ -469,20 +472,31 @@ checkLet e pos decs exps =
                             }
 
 uniqTypeDecs :: [Declaration] -> SourcePos -> Either TypeError ()
-uniqTypeDecs ds pos =
+uniqTypeDecs ds pos = uniqDecs Type isTypeDec typeId pos ds
+      where isTypeDec (TypeDec _ _) = True
+            isTypeDec _ = False
+            typeId (TypeDec name _) = name
+
+uniqFnDecs :: [Declaration] -> SourcePos -> Either TypeError ()
+uniqFnDecs ds pos = uniqDecs Fn isFnDec fnId pos ds
+      where isFnDec (FnDec _ _ _ _) = True
+            isFnDec _ = False
+            fnId (FnDec name _ _ _) = name
+
+uniqDecs :: Declarable ->
+            (Declaration -> Bool) ->
+            (Declaration -> String) ->
+            SourcePos ->
+            [Declaration] ->
+            Either TypeError ()
+uniqDecs decType filterFn nameFn pos ds =
     let
-      typeNames = typeId <$> filter isTypeDec ds
-      duplicates = typeNames \\ (nub typeNames)
+      names = nameFn <$> filter filterFn ds
+      duplicates = names \\ (nub names)
     in
-    if duplicates == []
-    then Right ()
-    else Left $ "Multiple declarations of the same type: " ++
-                (mconcat $ intersperse ", " duplicates) ++
-                " at " ++
-                show pos
-    where isTypeDec (TypeDec _ _) = True
-          isTypeDec _ = False
-          typeId (TypeDec name _) = name
+      if duplicates == []
+      then Right ()
+      else Left $ multipleDeclaredError decType pos duplicates
 
 initializeLetScope :: [Declaration] -> TypeEnv -> TypeEnv
 initializeLetScope [] e = e
@@ -549,6 +563,15 @@ maybeToEither (Just t) _ = Right t
 undeclaredError :: Declarable -> SourcePos -> Atom -> TypeError
 undeclaredError dec pos name =
     "Type Error! Undeclared " ++ (show dec) ++ ": " ++ name ++ " at " ++ show pos
+
+multipleDeclaredError :: Declarable -> SourcePos -> [Atom] -> TypeError
+multipleDeclaredError dec pos names =
+       "Multiple declarations of the same " ++
+        show dec ++
+        ": " ++
+        (mconcat $ intersperse ", " names) ++
+        " at " ++
+        show pos
 
 lookupTypeVal :: Show a => TypeEnv -> String -> (TypeEnv -> Env.Environment a) -> Maybe a
 lookupTypeVal env name getEnv = Sym.get name (sym env) >>= lookup (getEnv env)
