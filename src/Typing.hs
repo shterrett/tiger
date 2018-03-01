@@ -398,7 +398,9 @@ checkFunctionCall e pos fn args =
             | otherwise = Left $ "Incorrect number of arguments: expected " ++
                           show (length params) ++
                           " given " ++
-                          show (length args)
+                          show (length args) ++
+                          " at " ++
+                          show pos
           verifyArgTypes res@(_, Function params _) =
             const res <$>
               foldM (\(e', _) (paramType, argExp) -> verifyType e' paramType argExp)

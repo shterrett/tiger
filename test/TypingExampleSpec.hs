@@ -165,3 +165,23 @@ spec = do
         res <- checkTest "test30.tig"
         let Right (_, typ) = res
         typ `shouldBe` TigerInt
+      it "typechecks test 31" $ do
+        res <- checkTest "test31.tig"
+        let Left err = res
+        err `shouldBe` "Type Error! Expected Integer but got String at (line 3, column 22)"
+      it "typechecks test 32" $ do
+        res <- checkTest "test32.tig"
+        let Left err = res
+        err `shouldBe` "Type Error! Expected Integer but got String at (line 6, column 34)"
+      it "typechecks test 33" $ do
+        res <- checkTest "test33.tig"
+        let Left err = res
+        err `shouldBe` "Type Error! Undeclared type: rectype at (line 3, column 17)"
+      it "typechecks test 34" $ do
+        res <- checkTest "test34.tig"
+        let Left err = res
+        err `shouldBe` "Type Error! Expected Integer but got String at (line 5, column 11)"
+      it "typechecks test 35" $ do
+        res <- checkTest "test35.tig"
+        let Left err = res
+        err `shouldBe` "Incorrect number of arguments: expected 2 given 1 at (line 5, column 9)"

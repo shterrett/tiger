@@ -760,7 +760,7 @@ spec = do
           `shouldBe` Left (typeError dummyPos [Function [] Unit] $ Right (env, TigerStr))
       it "fails if the number of arguments is incorrect" $ do
         typeCheck env (FunctionCall dummyPos "add" [(IntLiteral pos1 5)])
-          `shouldBe` Left "Incorrect number of arguments: expected 2 given 1"
+          `shouldBe` Left "Incorrect number of arguments: expected 2 given 1 at (line 1, column 1)"
       it "fails if the arguments do not match the types of the parameters" $ do
         typeCheck env (FunctionCall dummyPos "add" [(IntLiteral pos1 5), (StringLiteral pos2 "Hi")])
           `shouldBe` Left (typeError pos2 [TigerInt] $ Right (env, TigerStr))
