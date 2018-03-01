@@ -228,3 +228,14 @@ spec = do
         res <- checkTest "test46.tig"
         let Right (_, typ) = res
         typ `shouldBe` TigerInt
+      it "typechecks test 47" $ do
+        -- Again allowing recursive declarations throughout let scope
+        res <- checkTest "test47.tig"
+        let Left err = res
+        err `shouldBe`  "Multiple declarations of the same type: a at (line 5, column 1)"
+      it "typechecks test 48" $ do
+        -- Again allowing recursive declarations throughout let scope
+        res <- checkTest "test48.tig"
+        let Left err = res
+        err `shouldBe`  "Multiple declarations of the same function: g at (line 5, column 1)"
+      -- it "typechecks test 49" -> Parse Error
