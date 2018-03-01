@@ -101,7 +101,7 @@ spec = do
           (nub $ typ <$> operators)
             `shouldBe` [Left $ typeError dummyPos [TigerInt] $ Right (emptyEnv, TigerStr)]
       describe "comparison" $ do
-        let operators = [Equality, NonEquality, LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual]
+        let operators = [LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual]
         it "types as TigerInt when all arguments are TigerInt" $ do
           let typ op = typeCheck emptyEnv (BinOp dummyPos
                                                  op
@@ -124,12 +124,54 @@ spec = do
           (nub $ typ <$> operators)
             `shouldBe` [Left $ typeError dummyPos [TigerInt] (Right (emptyEnv, TigerStr))]
         it "returns the left error if both types are wrong" $ do
-          let typ op = typeCheck emptyEnv (BinOp dummyPos
-                                                 op
-                                                 (NoValue dummyPos)
-                                                 (TigerTypes.Nil dummyPos))
+          let (ints, table) = Sym.put "ints" (sym emptyEnv)
+          let env = emptyEnv { tEnv = Env.addBinding (ints, (Array TigerInt)) (tEnv emptyEnv)
+                             , sym = table
+                             }
+          let pos1 = newPos "" 2 1
+          let typ op = typeCheck env (BinOp dummyPos
+                                            op
+                                            (NoValue dummyPos)
+                                            (ArrayCreation pos1
+                                                            "ints"
+                                                            (IntLiteral pos1 5)
+                                                            (IntLiteral pos1 0)))
           (nub $ typ <$> operators)
             `shouldBe` [Left $ typeError dummyPos [TigerInt, TigerStr] (Right (emptyEnv, Unit))]
+      describe "equality" $ do
+        let operators = [Equality, NonEquality]
+        it "allows records to be compared" $ do
+          let (person, table) = Sym.put "person" $ initialSymbolTable
+          let personType = Name person $ Just (Record [("name", TigerStr)])
+          let env = emptyEnv { sym = table
+                            , tEnv  = (Env.pushScope [( person
+                                                      , personType
+                                                      )]
+                                                      (tEnv emptyEnv))
+                            }
+          let p = RecordCreation dummyPos "person" [("name", (StringLiteral dummyPos "William"))]
+          let typ op = typeCheck env (BinOp dummyPos
+                                            op
+                                            p
+                                            p)
+          (nub $ typ <$> operators)
+            `shouldBe` [Right (env, TigerInt)]
+        it "allows array comparison" $ do
+          let (ints, table) = Sym.put "ints" (sym emptyEnv)
+          let env = emptyEnv { tEnv = Env.addBinding (ints, (Name ints (Just $ Array TigerInt))) (tEnv emptyEnv)
+                             , sym = table
+                             }
+          let pos1 = newPos "" 2 1
+          let array = (ArrayCreation pos1
+                                     "ints"
+                                     (IntLiteral pos1 5)
+                                     (IntLiteral pos1 0))
+          let typ op = typeCheck env (BinOp dummyPos
+                                            op
+                                            array
+                                            array)
+          (nub $ typ <$> operators)
+            `shouldBe` [Right (env, TigerInt)]
       describe "and / or" $ do
         let operators = [And, Or]
         it "types as TigerInt when all arguments are TigerInt" $ do

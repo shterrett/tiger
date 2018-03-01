@@ -95,7 +95,7 @@ spec = do
       it "typechecks test 14" $ do
         res <- checkTest "test14.tig"
         let Left err = res
-        err `shouldBe` "Type Error! Expected Integer or String but got rectype at (line 12, column 15)"
+        err `shouldBe` "Type Error! Expected rectype but got arrtype at (line 12, column 19)"
       it "typechecks test 15" $ do
         res <- checkTest "test15.tig"
         let Left err = res
@@ -224,3 +224,7 @@ spec = do
         res <- checkTest "test45.tig"
         let Left err = res
         err `shouldBe` "Cannot infer the type of nil at (line 5, column 17)"
+      it "typechecks test 46" $ do
+        res <- checkTest "test46.tig"
+        let Right (_, typ) = res
+        typ `shouldBe` TigerInt

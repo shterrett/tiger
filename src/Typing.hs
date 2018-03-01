@@ -67,6 +67,16 @@ aliasChain (Name n (Just t)) = n:(aliasChain t)
 aliasChain (Name n Nothing) = [n]
 aliasChain _ = []
 
+isNullable :: ProgramType -> Bool
+isNullable TigerInt = False
+isNullable TigerStr = False
+isNullable (Record _) = True
+isNullable (Array _) = False
+isNullable Unit = False
+isNullable (Name _ (Just t)) = isNullable t
+isNullable (Name _ Nothing) = True
+isNullable (Function _ _) = False
+
 data TypeEnv = TypeEnv { tEnv :: Env.Environment ProgramType
                        , vEnv :: Env.Environment ProgramType
                        , sym :: Sym.SymbolTable
@@ -134,13 +144,18 @@ checkBinOp :: TypeEnv ->
 checkBinOp e pos op exp1 exp2
     | op `elem` [Addition, Subtraction, Multiplication, Division, And, Or] =
       foldM (\(e', typ) exp -> verifyType e' TigerInt exp) (e, TigerInt) [exp1, exp2]
-    | op `elem` [Equality, NonEquality, LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual] =
+    | op `elem` [LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual] =
       case (typeCheck e exp1, typeCheck e exp2) of
         ((Right (_, TigerInt)), (Right (_, TigerInt))) -> Right (e, TigerInt)
         ((Right (_, TigerStr)), (Right (_, TigerStr))) -> Right (e, TigerInt)
         ((Right (_, TigerInt)), mismatch) -> Left $ typeError pos [TigerInt] mismatch
         ((Right (_, TigerStr)), mismatch) -> Left $ typeError pos [TigerStr] mismatch
         (mismatch, _) -> Left $ typeError pos [TigerInt, TigerStr] mismatch
+    | op `elem` [Equality, NonEquality] =
+      case (typeCheck e exp1, typeCheck e exp2) of
+        ((Right (_, t1)), _) -> mapType (const TigerInt) $ verifyType e t1 exp2
+        (_, (Right (_, t2))) -> mapType (const TigerInt) $ verifyType e t2 exp1
+        (err@(Left _), _) -> err
 
 checkArray :: TypeEnv ->
               SourcePos ->
@@ -523,7 +538,9 @@ verifyType :: TypeEnv
               -> ProgramType
               -> Expression
               -> Either TypeError (TypeEnv, ProgramType)
-verifyType env typ (Nil _) = Right (env, typ)
+verifyType env typ (Nil _) = if isNullable typ
+                             then Right (env, typ)
+                             else Left $ show typ ++ " cannot be inhabited by nil"
 verifyType env typ exp =
     case typeCheck env exp of
       res@(Right (env', act)) ->
