@@ -567,25 +567,6 @@ spec = do
       let pos2 = newPos "" 2 1
       let pos3 = newPos "" 2 10
 
-      it "creates a value entry for the function type" $ do
-        let (_, table') = Sym.put "n" table
-        let (_, table'') = Sym.put "m" table'
-        let Right (actEnv, Unit) =
-              typeCheck emptyEnv (DecExp dummyPos
-                                 (FnDec "add"
-                                        [ ("m", "int")
-                                        , ("n", "int")
-                                        ]
-                                        (Just "int")
-                                        (BinOp pos1
-                                               Addition
-                                               (LValExp pos2 (Id "m"))
-                                               (LValExp pos3 (Id "n")))))
-        (sym actEnv) `shouldBe` table''
-        (tEnv actEnv) `shouldBe` (tEnv emptyEnv)
-        let (Just (Function types retTyp)) = Env.lookup add (vEnv actEnv)
-        types `shouldBe` [TigerInt, TigerInt]
-        retTyp `shouldBe` TigerInt
       it "makes the function type available in the body scope" $ do
         let (factorial, table) = Sym.put "factorial" $ sym emptyEnv
         let (_, table') = Sym.put "n" table

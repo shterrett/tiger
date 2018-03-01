@@ -5,7 +5,7 @@ import qualified Data.Map.Strict as Map
 data Symbol = Symbol String Integer
 
 instance Show Symbol where
-    show (Symbol name i) = name ++ show i
+    show (Symbol name i) = name
 
 instance Eq Symbol where
     (==) (Symbol _ i_1) (Symbol _ i_2) = i_1 == i_2

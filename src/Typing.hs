@@ -2,7 +2,13 @@ module Typing where
 
 import Text.Parsec.Pos (SourcePos)
 import Control.Monad (foldM)
-import Data.List (intersperse, foldr1, foldl', sortBy, sort)
+import Data.List ( intersect
+                 , intersperse
+                 , foldr1
+                 , foldl'
+                 , sortBy
+                 , sort
+                 )
 import Data.Maybe (fromMaybe)
 import Data.Ord (comparing)
 import TigerTypes ( Expression(..)
@@ -16,6 +22,8 @@ import TigerTypes ( Expression(..)
                   )
 import qualified Symbol as Sym
 import qualified Environment as Env
+
+import Debug.Trace
 
 data ProgramType =
     TigerInt
@@ -50,16 +58,15 @@ instance Eq ProgramType where
     (==) _ _ = False
 
 cmpAliasTypes :: ProgramType -> ProgramType -> Bool
-cmpAliasTypes (Name m (Just (Array _))) (Name n _) = m == n
-cmpAliasTypes (Name m (Just (Record _))) (Name n _) = m == n
-cmpAliasTypes (Name m _) (Name n (Just (Array _))) = m == n
-cmpAliasTypes (Name m _) (Name n (Just (Record _))) = m == n
-cmpAliasTypes (Name m (Just t1)) (Name n (Just t2)) = if m == n
-                                                        then True
-                                                        else t1 == t2
-cmpAliasTypes (Name m _) (Name n _) = m == n
+cmpAliasTypes m@(Name _ t1) n@(Name _ t2) =
+    if intersect (aliasChain m) (aliasChain n) == []
+      then t1 == t2
+      else True
 
-
+aliasChain :: ProgramType -> [Sym.Symbol]
+aliasChain (Name n (Just t)) = n:(aliasChain t)
+aliasChain (Name n Nothing) = [n]
+aliasChain _ = []
 
 data TypeEnv = TypeEnv { tEnv :: Env.Environment ProgramType
                        , vEnv :: Env.Environment ProgramType
@@ -240,7 +247,7 @@ declareType :: TypeEnv
                -> Type
                -> Either TypeError (TypeEnv, ProgramType)
 declareType env pos name (TypeId typeName) =
-    addTypeBinding name id <$> lookupType env typeName pos
+    addTypeBinding name id <$> (traceShowId $ lookupType env typeName pos)
 declareType env pos name (ArrayOf typeName) =
     addTypeBinding name Array <$> lookupType env typeName pos
 declareType env pos name (RecordOf fields) =
@@ -459,6 +466,7 @@ checkLet e pos decs exps =
 initializeLetScope :: [Declaration] -> TypeEnv -> TypeEnv
 initializeLetScope [] e = e
 initializeLetScope ((VarDec _ _ _):ds) e  = initializeLetScope ds e
+initializeLetScope ((TypeDec name (TypeId _)):ds) e = initializeLetScope ds e
 initializeLetScope ((TypeDec name typ):ds) e =
     let
       (symbol, tbl) = Sym.put name (sym e)
