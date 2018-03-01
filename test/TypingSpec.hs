@@ -18,7 +18,6 @@ spec = do
     let initialTypes =
           [ ("int", TigerInt)
           , ("string", TigerStr)
-          , ("nil", Typing.Nil)
           ]
     let initialSymbolTable =
           foldr (\(s, _) tbl -> snd $ Sym.put s tbl)
@@ -38,14 +37,14 @@ spec = do
       it "formats an error message for a type mismatch" $ do
         typeError dummyPos [TigerInt] (Right (emptyEnv, TigerStr))
           `shouldBe` "Type Error! Expected Integer but got String at " ++ show dummyPos
-      it "formats an error message with multiple accepted types" $ do
-        typeError dummyPos [TigerInt, TigerStr] (Right (emptyEnv, Typing.Nil))
-          `shouldBe` "Type Error! Expected Integer or String but got nil at " ++ show dummyPos
+      it "formats an error message with multiple accepted types" $  do
+        typeError dummyPos [TigerInt, TigerStr] (Right (emptyEnv, Array TigerInt))
+          `shouldBe` "Type Error! Expected Integer or String but got [Integer] at " ++ show dummyPos
       it "passes through an error message that was encountered lower down" $ do
         typeError dummyPos [TigerInt] (Left "whoops!") `shouldBe` "whoops!"
     describe "typeCheck Nil" $ do
       it "types as Nil" $ do
-        typeCheck emptyEnv (TigerTypes.Nil dummyPos) `shouldBe` Right (emptyEnv, Typing.Nil)
+        typeCheck emptyEnv (TigerTypes.Nil dummyPos) `shouldBe` Left "Cannot infer the type of nil at (line 1, column 1)"
     describe "typeCheck Valueless" $ do
       it "types as Unit" $ do
         typeCheck emptyEnv (ValuelessExpression dummyPos (NoValue dummyPos))

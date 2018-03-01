@@ -13,7 +13,6 @@ checkTest file = do
     let initialTypes =
           [ ("int", TigerInt)
           , ("string", TigerStr)
-          , ("nil", Typing.Nil)
           ]
     let initialSymbolTable =
           foldr (\(s, _) tbl -> snd $ Sym.put s tbl)
@@ -205,3 +204,23 @@ spec = do
         res <- checkTest "test40.tig"
         let Left err = res
         err `shouldBe` "Type Error! Expected () but got Integer at (line 3, column 29)"
+      it "typechecks test 41" $ do
+        res <- checkTest "test41.tig"
+        let Right (_, typ) = res
+        typ `shouldBe` TigerInt
+      it "typechecks test 42" $ do
+        res <- checkTest "test42.tig"
+        let Right (_, typ) = res
+        typ `shouldBe` Unit
+      it "typechecks test 43" $ do
+        res <- checkTest "test43.tig"
+        let Left err = res
+        err `shouldBe` "Type Error! Expected Integer but got () at (line 6, column 9)"
+      it "typechecks test 44" $ do
+        res <- checkTest "test44.tig"
+        let Right (_, typ) = res
+        typ `shouldBe` Unit
+      it "typechecks test 45" $ do
+        res <- checkTest "test45.tig"
+        let Left err = res
+        err `shouldBe` "Cannot infer the type of nil at (line 5, column 17)"

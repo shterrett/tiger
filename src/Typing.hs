@@ -32,7 +32,6 @@ data ProgramType =
     | TigerStr
     | Record [(Atom, ProgramType)]
     | Array ProgramType
-    | Nil
     | Unit
     | Name Sym.Symbol (Maybe ProgramType)
     | Function [ProgramType] ProgramType
@@ -42,7 +41,6 @@ instance Show ProgramType where
     show TigerStr = "String"
     show (Record fields) = "{" ++ show fields ++ "}"
     show (Array typ) = "[" ++ show typ ++ "]"
-    show Typing.Nil = "nil"
     show Unit = "()"
     show (Name name _) = show name
     show (Function args return) = "fn" ++
@@ -52,7 +50,6 @@ instance Show ProgramType where
 instance Eq ProgramType where
     (==) (TigerInt) (TigerInt) = True
     (==) (TigerStr) (TigerStr) = True
-    (==) Typing.Nil Typing.Nil = True
     (==) Unit Unit = True
     (==) n@(Name _ _) m@(Name _ _) = cmpAliasTypes n m
     (==) (Name _ (Just t1)) t2 = t1 == t2
@@ -100,7 +97,7 @@ mapType :: (ProgramType -> ProgramType) ->
 mapType = fmap . fmap
 
 typeCheck :: TypeEnv -> Expression -> Either TypeError (TypeEnv, ProgramType)
-typeCheck e (TigerTypes.Nil _) = Right (e, Typing.Nil)
+typeCheck e (TigerTypes.Nil pos) = Left $ "Cannot infer the type of nil at " ++ show pos
 typeCheck e (ValuelessExpression _ _) = Right (e, Unit)
 typeCheck e (NoValue _) = Right (e, Unit)
 typeCheck e (Break _) = Right (e, Unit)
@@ -310,7 +307,7 @@ addVarBinding' a et = Right $ addVarBinding a et
 addVarScope :: TypeEnv -> [(Atom, ProgramType)] -> TypeEnv
 addVarScope env typs =
     let
-      initial = Sym.put "nil" (sym env)
+      initial = Sym.put "int" (sym env)
       atomsAndTables = scanr (\(name, _) (_, tbl')-> Sym.put name tbl') initial typs
       table' = snd $ head atomsAndTables
       atomsAndTypes = zip (fst <$> atomsAndTables) (snd <$> typs)
@@ -526,10 +523,11 @@ verifyType :: TypeEnv
               -> ProgramType
               -> Expression
               -> Either TypeError (TypeEnv, ProgramType)
+verifyType env typ (Nil _) = Right (env, typ)
 verifyType env typ exp =
     case typeCheck env exp of
       res@(Right (env', act)) ->
-        if act == typ || act == Typing.Nil
+        if act == typ
         then Right (env', act)
         else Left $ typeError (position exp) [typ] res
       mismatch -> Left $ typeError (position exp) [typ] mismatch
