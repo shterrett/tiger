@@ -185,3 +185,15 @@ spec = do
         res <- checkTest "test35.tig"
         let Left err = res
         err `shouldBe` "Incorrect number of arguments: expected 2 given 1 at (line 5, column 9)"
+      it "typechecks test 36" $ do
+        res <- checkTest "test36.tig"
+        let Left err = res
+        err `shouldBe` "Incorrect number of arguments: expected 2 given 3 at (line 5, column 9)"
+      it "typechecks test 37" $ do
+        res <- checkTest "test37.tig"
+        let Right (_, typ) = res
+        typ `shouldBe` TigerInt
+      it "typechecks test 38" $ do
+        res <- checkTest "test38.tig"
+        let Left err = res
+        err `shouldBe` "Multiple declarations of the same type: a at (line 4, column 1)"

@@ -6,6 +6,8 @@ import Data.List ( intersect
                  , intersperse
                  , foldr1
                  , foldl'
+                 , nub
+                 , (\\)
                  , sortBy
                  , sort
                  )
@@ -456,14 +458,31 @@ checkLet :: TypeEnv ->
             Either TypeError (TypeEnv, ProgramType)
 checkLet e pos decs exps =
     (\(e', typ) -> (unscope e', typ)) <$>
-    (foldM (\(e', _) dec -> typeCheck e' (DecExp pos dec)) (initializeLetScope decs $ scope e, Unit) decs >>=
-     (\(e', _) -> typeCheck e' (Sequence pos exps)))
+    (uniqTypeDecs decs pos >>
+      (foldM (\(e', _) dec -> typeCheck e' (DecExp pos dec)) (initializeLetScope decs $ scope e, Unit) decs >>=
+      (\(e', _) -> typeCheck e' (Sequence pos exps))))
     where scope env = env { tEnv = Env.pushScope [] (tEnv env)
                           , vEnv = Env.pushScope [] (vEnv env)
                           }
           unscope env = env { tEnv = Env.popScope (tEnv env)
                             , vEnv = Env.popScope (vEnv env)
                             }
+
+uniqTypeDecs :: [Declaration] -> SourcePos -> Either TypeError ()
+uniqTypeDecs ds pos =
+    let
+      typeNames = typeId <$> filter isTypeDec ds
+      duplicates = typeNames \\ (nub typeNames)
+    in
+    if duplicates == []
+    then Right ()
+    else Left $ "Multiple declarations of the same type: " ++
+                (mconcat $ intersperse ", " duplicates) ++
+                " at " ++
+                show pos
+    where isTypeDec (TypeDec _ _) = True
+          isTypeDec _ = False
+          typeId (TypeDec name _) = name
 
 initializeLetScope :: [Declaration] -> TypeEnv -> TypeEnv
 initializeLetScope [] e = e
