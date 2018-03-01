@@ -624,26 +624,20 @@ spec = do
                                           (LValExp pos2 (Id "m"))
                                           (LValExp pos3 (Id "n")))))
           `shouldBe` Left (typeError pos1 [TigerStr] (Right (emptyEnv, TigerInt)))
-      it ("does not enforce a body type when the return type is Nothing; " ++
-          "it sets the return type as Unit") $ do
+      it ("enforces the return type of the body is Unit when return type is Nothing") $ do
         let (_, table') = Sym.put "n" table
         let (_, table'') = Sym.put "m" table'
-        let Right (actEnv, Unit) =
-              typeCheck emptyEnv (DecExp dummyPos
-                                 (FnDec "add"
-                                        [ ("m", "int")
-                                        , ("n", "int")
-                                        ]
-                                        Nothing
-                                        (BinOp pos1
-                                               Addition
-                                               (LValExp pos2 (Id "m"))
-                                               (LValExp pos3 (Id "n")))))
-        (sym actEnv) `shouldBe` table''
-        (tEnv actEnv) `shouldBe` (tEnv emptyEnv)
-        let (Just (Function types retTyp)) = Env.lookup add (vEnv actEnv)
-        types `shouldBe` [TigerInt, TigerInt]
-        retTyp `shouldBe` Unit
+        typeCheck emptyEnv (DecExp dummyPos
+                            (FnDec "add"
+                                  [ ("m", "int")
+                                  , ("n", "int")
+                                  ]
+                                  Nothing
+                                  (BinOp pos1
+                                          Addition
+                                          (LValExp pos2 (Id "m"))
+                                          (LValExp pos3 (Id "n")))))
+          `shouldBe` Left (typeError pos1 [Unit] (Right (emptyEnv, TigerInt)))
       it "does ensure the body typechecks when the return type is Nothing" $ do
         typeCheck emptyEnv (DecExp dummyPos
                             (FnDec "add"

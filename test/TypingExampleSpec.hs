@@ -201,3 +201,7 @@ spec = do
         res <- checkTest "test39.tig"
         let Left err = res
         err `shouldBe` "Multiple declarations of the same function: g at (line 4, column 1)"
+      it "typechecks test 40" $ do
+        res <- checkTest "test40.tig"
+        let Left err = res
+        err `shouldBe` "Type Error! Expected () but got Integer at (line 3, column 29)"

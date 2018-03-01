@@ -328,23 +328,17 @@ declareFn :: TypeEnv
              -> Maybe TypeName
              -> Expression
              -> Either TypeError (TypeEnv, ProgramType)
-declareFn e pos name fields (Just retTyp) body =
+declareFn e pos name fields retTyp body =
     do
       args <- argTypes pos e fields
-      (_, returnType) <- lookupType e retTyp pos
+      (_, returnType) <- lookupReturnType e pos retTyp
       let fnTyp = Function (fmap snd args) returnType
       let e' = (flip addVarScope $ args) . fst $ addVarBinding name (e, fnTyp)
       mapType (const Unit) (
         mapEnv popVarScope (
           verifyType e' returnType body))
-declareFn e pos name fields Nothing body =
-    do
-      args <- argTypes pos e fields
-      let fnTyp = Function (fmap snd args) Unit
-      let e' = (flip addVarScope $ args) . fst $ addVarBinding name (e, fnTyp)
-      mapType (const Unit) (
-        mapEnv popVarScope (
-          typeCheck e' body))
+    where lookupReturnType e pos (Just retTyp) = lookupType e retTyp pos
+          lookupReturnType e _ Nothing = Right (e, Unit)
 
 argTypes :: SourcePos -> TypeEnv -> [(Atom, TypeName)] -> Either TypeError [(Atom, ProgramType)]
 argTypes pos e fields =
