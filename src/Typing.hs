@@ -447,7 +447,7 @@ checkLet :: TypeEnv ->
             Either TypeError (TypeEnv, ProgramType)
 checkLet e pos decs exps =
     (\(e', typ) -> (unscope e', typ)) <$>
-    (foldM (\(e', _) dec -> typeCheck e' (DecExp pos dec)) (scope e, Unit) decs >>=
+    (foldM (\(e', _) dec -> typeCheck e' (DecExp pos dec)) (initializeLetScope decs $ scope e, Unit) decs >>=
      (\(e', _) -> typeCheck e' (Sequence pos exps)))
     where scope env = env { tEnv = Env.pushScope [] (tEnv env)
                           , vEnv = Env.pushScope [] (vEnv env)
@@ -455,6 +455,35 @@ checkLet e pos decs exps =
           unscope env = env { tEnv = Env.popScope (tEnv env)
                             , vEnv = Env.popScope (vEnv env)
                             }
+
+initializeLetScope :: [Declaration] -> TypeEnv -> TypeEnv
+initializeLetScope [] e = e
+initializeLetScope ((VarDec _ _ _):ds) e  = initializeLetScope ds e
+initializeLetScope ((TypeDec name typ):ds) e =
+    let
+      (symbol, tbl) = Sym.put name (sym e)
+    in
+      initializeLetScope ds
+                         (e { tEnv = Env.addBinding (symbol, Name symbol Nothing)
+                                                    (tEnv e)
+                            , sym = tbl
+                            })
+initializeLetScope ((FnDec name args typ _):ds) e =
+    let
+      findType n = lookupTypeVal e n tEnv
+      (symbol, tbl) = Sym.put name (sym e)
+      returnType = case typ >>= findType of
+                     Just t -> t
+                     Nothing -> Unit
+      argTypes = mapM findType (snd <$> args)
+    in
+      case argTypes of
+        Nothing -> e
+        Just ts -> initializeLetScope ds
+                                      (e { vEnv = Env.addBinding (symbol, Function ts returnType)
+                                                                 (vEnv e)
+                                         , sym = tbl
+                                         })
 
 verifyType :: TypeEnv
               -> ProgramType
