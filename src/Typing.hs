@@ -143,7 +143,7 @@ checkBinOp :: TypeEnv ->
               Either TypeError (TypeEnv, ProgramType)
 checkBinOp e pos op exp1 exp2
     | op `elem` [Addition, Subtraction, Multiplication, Division, And, Or] =
-      foldM (\(e', typ) exp -> verifyType e' TigerInt exp) (e, TigerInt) [exp1, exp2]
+      foldM (\(e', typ) exp -> verifyType e' TigerInt exp) (e, TigerInt) (traceShowId [exp1, exp2])
     | op `elem` [LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual] =
       case (typeCheck e exp1, typeCheck e exp2) of
         ((Right (_, TigerInt)), (Right (_, TigerInt))) -> Right (e, TigerInt)

@@ -7,26 +7,11 @@ import qualified Environment as Env
 import qualified Symbol as Sym
 import Parse (parse)
 import Typing
+import Builtins (initialTypeEnv)
 
 checkTest :: String -> IO (Either TypeError (TypeEnv, ProgramType))
 checkTest file = do
-    let initialTypes =
-          [ ("int", TigerInt)
-          , ("string", TigerStr)
-          ]
-    let initialSymbolTable =
-          foldr (\(s, _) tbl -> snd $ Sym.put s tbl)
-                (Sym.newTable 0)
-                initialTypes
-    let initialEnv =
-          Env.fromList . catMaybes $
-          (fmap (\(s, t) -> (,) <$> Sym.get s initialSymbolTable <*> (Just t))
-                initialTypes)
-    let emptyEnv =
-          TypeEnv { sym = initialSymbolTable
-                  , tEnv = initialEnv
-                  , vEnv = Env.fromList []
-                  }
+    let emptyEnv = initialTypeEnv
     program <- readFile $ "test/testcases/" ++ file
     return ((parse program) >>= (typeCheck emptyEnv))
 
@@ -239,3 +224,9 @@ spec = do
         let Left err = res
         err `shouldBe`  "Multiple declarations of the same function: g at (line 5, column 1)"
       -- it "typechecks test 49" -> Parse Error
+      it "typechecks merge" $ do
+        res <- checkTest "merge.tig"
+        let Left err = res
+        err `shouldBe` ""
+        let Right (_, typ) = res
+        typ `shouldBe` Unit
