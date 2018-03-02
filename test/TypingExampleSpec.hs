@@ -226,7 +226,9 @@ spec = do
       -- it "typechecks test 49" -> Parse Error
       it "typechecks merge" $ do
         res <- checkTest "merge.tig"
-        let Left err = res
-        err `shouldBe` ""
+        let Right (_, typ) = res
+        typ `shouldBe` Unit
+      it "typechecks queens" $ do
+        res <- checkTest "queens.tig"
         let Right (_, typ) = res
         typ `shouldBe` Unit
