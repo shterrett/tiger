@@ -5,6 +5,7 @@ import Text.Parsec hiding (parse)
 import qualified Text.Parsec as Parsec (parse)
 import Text.Parsec.Char
 import Data.Char (isSpace)
+import BinopPrecedence (setPrecedence)
 
 parse :: String -> Either String Expression
 parse s = case Parsec.parse (spaces >> expressionParser) "" (stripComments s) of
@@ -34,7 +35,7 @@ expressionParser =
     <|> try ((uncurry <$> (Let <$> getPosition)) <*> letParser)
     <|> try (Negation <$> getPosition <*> negationParser)
     <|> try ((uncurry <$> (Assignment <$> getPosition)) <*> assignmentParser)
-    <|> try binopParser
+    <|> try (setPrecedence <$> binopParser)
     <|> try ((uncurry <$> (FunctionCall <$> getPosition)) <*> funcParser)
     <|> try ((uncurry <$> (RecordCreation <$> getPosition)) <*> recordCreateParser)
     <|> try ((uncurry <$> (While <$> getPosition)) <*> whileParser)

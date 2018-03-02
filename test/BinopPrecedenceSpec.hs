@@ -41,7 +41,22 @@ spec = do
                                    (BinOp (position 6)
                                           Subtraction
                                           (IntLiteral (position 5) 2)
-                                          (BinOp (position 8)
+                                          (BinOp (position 10)
                                                  Multiplication
-                                                 (IntLiteral (position 7) 3)
-                                                 (IntLiteral (position 11) 4))))
+                                                 (IntLiteral (position 9) 3)
+                                                 (IntLiteral (position 13) 4))))
+      it "handles an expression where the tree branches on the right" $ do
+        setPrecedence <$> Parsec.parse binopParser  "" "2 * 3 < 1 * 5 + 3"
+          `shouldBe` Right (BinOp (position 6)
+                                  LessThan
+                                  (BinOp (position 2)
+                                         Multiplication
+                                         (IntLiteral (position 1) 2)
+                                         (IntLiteral (position 5) 3))
+                                  (BinOp (position 14)
+                                         Addition
+                                         (BinOp (position 10)
+                                                Multiplication
+                                                (IntLiteral (position 9) 1)
+                                                (IntLiteral (position 13) 5))
+                                         (IntLiteral (position 17) 3)))
