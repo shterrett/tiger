@@ -19,6 +19,7 @@ library
                      , Straightline
                      , TigerTypes
                      , Parse
+                     , BinopPrecedence
                      , Symbol
                      , Environment
                      , Semantics
@@ -44,6 +45,7 @@ test-suite tiger-test
   main-is:             Spec.hs
   other-modules:       StraightlineSpec
                      , ParseSpec
+                     , BinopPrecedenceSpec
                      , SymbolSpec
                      , EnvironmentSpec
                      , TypingSpec

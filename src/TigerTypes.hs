@@ -1,5 +1,7 @@
 module TigerTypes where
 
+import Data.Maybe (fromMaybe)
+import Data.List (findIndex)
 import Text.Parsec.Pos (SourcePos)
 
 type Atom = String
@@ -58,6 +60,19 @@ data Operator =
     | And
     | Or
     deriving (Show, Eq)
+
+instance Ord Operator where
+  compare x y = compare (precedence x) (precedence y)
+    where
+      precedence op = fromMaybe 0 (
+        findIndex id $
+          elem op <$> [ [Or]
+                      , [And]
+                      , [Equality, NonEquality, LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual]
+                      , [Addition, Subtraction]
+                      , [Multiplication, Division]
+                      ])
+
 
 position :: Expression -> SourcePos
 position (LValExp pos _) = pos
