@@ -29,5 +29,11 @@ put s tbl@(SymbolTable (m, i)) =
                                )
                  )
 
+putUnique :: String -> SymbolTable -> (Symbol, SymbolTable)
+putUnique s tbl@(SymbolTable (_, i)) =
+    case get s tbl of
+      Just (Symbol _ _) -> Symbol.put (s ++ "_" ++ show i) tbl
+      Nothing -> Symbol.put s tbl
+
 get :: String -> SymbolTable -> Maybe Symbol
 get s (SymbolTable (m, _)) = Map.lookup s m

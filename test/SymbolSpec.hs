@@ -64,3 +64,16 @@ spec = do
         let (y, tbl'') = Symbol.put "y" tbl'
         let (x', _) = Symbol.put "x" tbl''
         x `shouldBe` x'
+      it "increments the index when putUnique is called" $ do
+        let tbl = Symbol.newTable 0
+        let (x, tbl_1) = Symbol.putUnique "x" tbl
+        let (x_1, tbl_2) = Symbol.putUnique "x" tbl_1
+        let (x_2, tbl_3) = Symbol.put "x" tbl_2
+        let (y, tbl_4) = Symbol.put "y" tbl_3
+        let (x_3, _) = Symbol.putUnique "x" tbl_4
+
+        x `shouldBe` (Symbol.Symbol "x" 0)
+        x_1 `shouldBe` (Symbol.Symbol "x_1" 1)
+        x_2 `shouldBe` (Symbol.Symbol "x" 0)
+        y `shouldBe` (Symbol.Symbol "y" 2)
+        x_3 `shouldBe` (Symbol.Symbol "x_2" 3)
