@@ -12,7 +12,7 @@ spec =
         let args = [Escape, Escape]
         let (label, tbl') = Tmp.newLabel tbl
 
-        let (frame, tbl'') = newX86Frame label args tbl'
+        let (tbl'', frame) = newX86Frame label args tbl'
 
         name frame `shouldBe` label
         formals frame `shouldBe` [InFrame 8, InFrame 12]
@@ -24,9 +24,10 @@ spec =
         let args = [Escape, Escape]
         let (label, tbl') = Tmp.newLabel tbl
 
-        let (frame, tbl'') = newX86Frame label args tbl'
+        let (tbl'', frame) = newX86Frame label args tbl'
 
-        let (frame', tbl''') = allocLocal Escape frame tbl''
+        let ((tbl''', frame'), local) = allocLocal Escape frame tbl''
 
+        local `shouldBe` (InFrame 16)
         locals frame' `shouldBe` [InFrame 16]
         x86_nextOffset frame' `shouldBe` 20

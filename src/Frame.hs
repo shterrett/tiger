@@ -17,7 +17,7 @@ class Frame a where
     name :: a -> Tmp.Label
     formals :: a -> [Access]
     locals :: a -> [Access]
-    allocLocal :: Var -> a -> Sym.SymbolTable -> (a, Sym.SymbolTable)
+    allocLocal :: Var -> a -> Sym.SymbolTable -> ((Sym.SymbolTable, a), Access)
 
 data X86Frame = X86Frame { x86_name :: Tmp.Label
                          , x86_formals :: [Access]
@@ -26,7 +26,7 @@ data X86Frame = X86Frame { x86_name :: Tmp.Label
                          }
                          deriving (Show, Eq)
 
-newX86Frame :: Tmp.Label -> [Var] -> Sym.SymbolTable -> (X86Frame, Sym.SymbolTable)
+newX86Frame :: Tmp.Label -> [Var] -> Sym.SymbolTable -> (Sym.SymbolTable, X86Frame)
 newX86Frame n fs tbl =
     let
       frame = X86Frame { x86_name = n
@@ -37,31 +37,33 @@ newX86Frame n fs tbl =
     in
       x86VarInit fs tbl frame
 
-x86VarInit :: [Var] -> Sym.SymbolTable -> X86Frame -> (X86Frame, Sym.SymbolTable)
-x86VarInit fs tbl frame = foldl (\(frame', tbl') f -> x86_allocFormal f frame' tbl')
-                                (frame, tbl)
+x86VarInit :: [Var] -> Sym.SymbolTable -> X86Frame -> (Sym.SymbolTable, X86Frame)
+x86VarInit fs tbl frame = foldl (\(tbl', frame') f -> x86_allocFormal f frame' tbl')
+                                (tbl, frame)
                                 fs
 
-x86_allocFormal :: Var -> X86Frame -> Sym.SymbolTable -> (X86Frame, Sym.SymbolTable)
+x86_allocFormal :: Var -> X86Frame -> Sym.SymbolTable -> (Sym.SymbolTable, X86Frame)
 x86_allocFormal = x86_alloc x86_addFormal
 
-x86_allocLocal :: Var -> X86Frame -> Sym.SymbolTable -> (X86Frame, Sym.SymbolTable)
-x86_allocLocal = x86_alloc x86_addLocal
+x86_allocLocal :: Var -> X86Frame -> Sym.SymbolTable -> ((Sym.SymbolTable, X86Frame), Access)
+x86_allocLocal var f tbl = 
+    let (tbl', f') = x86_alloc x86_addLocal var f tbl
+    in ((tbl', f'), last $ locals f')
 
 x86_alloc :: (Access -> X86Frame -> X86Frame) ->
              Var ->
              X86Frame ->
              Sym.SymbolTable ->
-             (X86Frame, Sym.SymbolTable)
-x86_alloc add Escape f tbl = ( (add (InFrame $ x86_nextOffset f) f) {
+             (Sym.SymbolTable, X86Frame)
+x86_alloc add Escape f tbl = ( tbl
+                             , (add (InFrame $ x86_nextOffset f) f) {
                                   x86_nextOffset = (x86_nextOffset f + 4)
                                 }
-                             , tbl
                              )
 x86_alloc add NoEscape f tbl =
     let (tmp, tbl') = Tmp.newVar tbl
-    in ( add (InReg tmp) f
-       , tbl'
+    in ( tbl'
+       , add (InReg tmp) f
        )
 
 x86_addLocal :: Access -> X86Frame -> X86Frame
