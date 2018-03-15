@@ -4,6 +4,9 @@ import Test.Hspec
 import qualified Symbol as Sym
 import qualified Temporary as Tmp
 import qualified Frame
+import FrameExp ( Level(..)
+                , Access(..)
+                )
 import Alloc
 
 spec :: Spec

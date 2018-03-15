@@ -3,15 +3,9 @@ module Alloc where
 import qualified Symbol as Sym
 import qualified Temporary as Tmp
 import qualified Frame
-
-data Frame.Frame a => Level a =
-    Outermost
-    | Nested (Level a) a
-    deriving (Show, Eq)
-
-data Frame.Frame a => Access a =
-    Access (Level a) Frame.Access
-    deriving (Show, Eq)
+import FrameExp ( Level(..)
+                , Access(..)
+                )
 
 newLevel :: Level Frame.X86Frame ->
             Tmp.Label ->
