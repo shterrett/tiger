@@ -1,4 +1,4 @@
-module TigerTypes where
+module AST where
 
 import Data.Maybe (fromMaybe)
 import Data.List (findIndex)

@@ -4,7 +4,7 @@ import Test.Hspec
 import Text.Parsec.Pos (newPos)
 import qualified Text.Parsec as Parsec (parse)
 import Parse
-import TigerTypes hiding (position)
+import AST hiding (position)
 import BinopPrecedence
 
 position col = newPos "" 1 col

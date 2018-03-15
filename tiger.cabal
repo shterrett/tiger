@@ -17,14 +17,12 @@ library
   hs-source-dirs:      src
   exposed-modules:     Lib
                      , Straightline
-                     , TigerTypes
+                     , AST
                      , Parse
                      , BinopPrecedence
                      , Symbol
                      , Environment
-                     , Semantics
                      , Typing
-                     , Translation
                      , Builtins
   build-depends:       base >= 4.7 && < 5
                      , parsec

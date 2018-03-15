@@ -1,6 +1,6 @@
 module BinopPrecedence where
 
-import TigerTypes
+import AST
 
 setPrecedence :: Expression -> Expression
 setPrecedence root@(BinOp pos1 rootOp l@(BinOp _ _ _ _) r) =
