@@ -1,4 +1,4 @@
-module Translate where
+module Alloc where
 
 import qualified Symbol as Sym
 import qualified Temporary as Tmp

@@ -1,14 +1,14 @@
-module TranslateSpec where
+module AllocSpec where
 
 import Test.Hspec
 import qualified Symbol as Sym
 import qualified Temporary as Tmp
 import qualified Frame
-import Translate
+import Alloc
 
 spec :: Spec
 spec =
-    describe "Translate" $ do
+    describe "Alloc" $ do
       it "returns a new Access that contains the frame and the level and an extra formal for the link" $ do
         let tbl = Sym.newTable 0
         let (label, tbl') = Tmp.newLabel tbl

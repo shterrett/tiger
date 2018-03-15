@@ -24,7 +24,7 @@ library
                      , Environment
                      , Semantics
                      , Typing
-                     , Translate
+                     , Alloc
                      , Temporary
                      , Frame
                      , Builtins
@@ -55,7 +55,7 @@ test-suite tiger-test
                      , TypingExampleSpec
                      , TemporarySpec
                      , FrameSpec
-                     , TranslateSpec
+                     , AllocSpec
   build-depends:       base
                      , tiger
                      , hspec
