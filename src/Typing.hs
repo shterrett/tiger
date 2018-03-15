@@ -13,15 +13,15 @@ import Data.List ( intersect
                  )
 import Data.Maybe (fromMaybe)
 import Data.Ord (comparing)
-import TigerTypes ( Expression(..)
-                  , LValue(..)
-                  , Declaration(..)
-                  , Type(..)
-                  , Operator(..)
-                  , TypeName
-                  , position
-                  , Atom
-                  )
+import AST ( Expression(..)
+           , LValue(..)
+           , Declaration(..)
+           , Type(..)
+           , Operator(..)
+           , TypeName
+           , position
+           , Atom
+           )
 import qualified Symbol as Sym
 import qualified Environment as Env
 
@@ -105,7 +105,7 @@ mapType :: (ProgramType -> ProgramType) ->
 mapType = fmap . fmap
 
 typeCheck :: TypeEnv -> Expression -> Either TypeError (TypeEnv, ProgramType)
-typeCheck e (TigerTypes.Nil pos) = Left $ "Cannot infer the type of nil at " ++ show pos
+typeCheck e (Nil pos) = Left $ "Cannot infer the type of nil at " ++ show pos
 typeCheck e (ValuelessExpression _ _) = Right (e, Unit)
 typeCheck e (NoValue _) = Right (e, Unit)
 typeCheck e (Break _) = Right (e, Unit)

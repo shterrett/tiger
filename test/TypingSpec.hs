@@ -5,12 +5,12 @@ import Data.List (nub)
 import Data.Maybe (catMaybes)
 import qualified Environment as Env
 import qualified Symbol as Sym
-import TigerTypes ( Expression(..)
-                  , Operator(..)
-                  , LValue(..)
-                  , Declaration(..)
-                  , Type(..)
-                  )
+import AST ( Expression(..)
+           , Operator(..)
+           , LValue(..)
+           , Declaration(..)
+           , Type(..)
+           )
 import Text.Parsec.Pos (initialPos, newPos)
 import Typing
 
@@ -44,7 +44,7 @@ spec = do
         typeError dummyPos [TigerInt] (Left "whoops!") `shouldBe` "whoops!"
     describe "typeCheck Nil" $ do
       it "types as Nil" $ do
-        typeCheck emptyEnv (TigerTypes.Nil dummyPos) `shouldBe` Left "Cannot infer the type of nil at (line 1, column 1)"
+        typeCheck emptyEnv (Nil dummyPos) `shouldBe` Left "Cannot infer the type of nil at (line 1, column 1)"
     describe "typeCheck Valueless" $ do
       it "types as Unit" $ do
         typeCheck emptyEnv (ValuelessExpression dummyPos (NoValue dummyPos))

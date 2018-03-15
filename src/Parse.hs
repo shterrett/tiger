@@ -1,6 +1,6 @@
 module Parse where
 
-import TigerTypes
+import AST
 import Text.Parsec hiding (parse)
 import qualified Text.Parsec as Parsec (parse)
 import Text.Parsec.Char

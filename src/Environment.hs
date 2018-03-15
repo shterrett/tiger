@@ -2,7 +2,7 @@ module Environment where
 
 import qualified Data.Map.Strict as Map
 import Symbol (Symbol)
-import TigerTypes (Expression)
+import AST (Expression)
 
 type Environment a = [Map.Map Symbol a]
 

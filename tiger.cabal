@@ -17,7 +17,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Lib
                      , Straightline
-                     , TigerTypes
+                     , AST
                      , Parse
                      , BinopPrecedence
                      , Symbol
