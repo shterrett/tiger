@@ -120,9 +120,6 @@ typeCheck e (RecordCreation pos name fields) = checkRecord e pos name fields
 typeCheck e (LValExp pos (Id name)) = lookupValue e name pos
 typeCheck e (LValExp pos (RecordAccess record field)) = checkRecordAccess e pos record field
 typeCheck e (LValExp pos (ArraySubscript arr sub)) = checkArraySubscript e pos arr sub
-typeCheck e (DecExp pos (TypeDec name typ)) = declareType e pos name typ
-typeCheck e (DecExp pos (VarDec name typ exp)) = declareVariable e pos name typ exp
-typeCheck e (DecExp pos (FnDec name fields retTyp body)) = declareFn e pos name fields retTyp body
 typeCheck e (Assignment pos (Id var) exp) = checkVariableAssignment e pos var exp
 typeCheck e (Assignment pos (ArraySubscript arr sub) exp) = checkArrayAssignment e pos arr sub exp
 typeCheck e (Assignment pos (RecordAccess rec field) exp) = checkRecordAssignment e pos rec field exp
@@ -174,11 +171,11 @@ checkArray env pos name lengthExp initExp =
           checkScalarExp (ev, alias@((Name _ (Just arrTyp@(Name _ _))))) =
             mapType (const alias) $ checkScalarExp (ev, arrTyp)
 
-checkRecord :: TypeEnv
-               -> SourcePos
-               -> TypeName
-               -> [(Atom, Expression)]
-               -> Either TypeError (TypeEnv, ProgramType)
+checkRecord :: TypeEnv ->
+               SourcePos ->
+               TypeName ->
+               [(Atom, Expression)] ->
+               Either TypeError (TypeEnv, ProgramType)
 checkRecord env pos name fields =
     (lookupType env name pos) >>= checkRecordType >>= verifyTypesPresent >>= checkFieldsTypes
     where checkRecordType typ@(_, Name _ (Just (Record _))) = Right typ
@@ -205,11 +202,11 @@ checkRecord env pos name fields =
             mapType (const alias) $ checkFieldsTypes (env', typ)
 
 
-checkRecordAccess :: TypeEnv
-                     -> SourcePos
-                     -> LValue
-                     -> Atom
-                     -> Either TypeError (TypeEnv, ProgramType)
+checkRecordAccess :: TypeEnv ->
+                     SourcePos ->
+                     LValue ->
+                     Atom ->
+                     Either TypeError (TypeEnv, ProgramType)
 checkRecordAccess env pos (Id record) field =
     lookupValue env record pos >>= recordFields pos >>= recordFieldType pos field
 checkRecordAccess env pos (RecordAccess record' field') field =
@@ -227,11 +224,11 @@ recordFieldType :: SourcePos -> Atom -> (TypeEnv, [(Atom, ProgramType)]) -> Eith
 recordFieldType pos field (env, fields) = (,) env <$>
     maybeToEither (lookup field fields) (undeclaredError Field pos field)
 
-checkArraySubscript :: TypeEnv
-                       -> SourcePos
-                       -> LValue
-                       -> Expression
-                       -> Either TypeError (TypeEnv, ProgramType)
+checkArraySubscript :: TypeEnv ->
+                       SourcePos ->
+                       LValue ->
+                       Expression ->
+                       Either TypeError (TypeEnv, ProgramType)
 checkArraySubscript env pos arr@(ArraySubscript arr' exp') exp =
     verifyType env TigerInt exp' >>=
       (\(env', _) -> verifyType env' TigerInt exp) >>=
@@ -255,11 +252,19 @@ scalarType _ (env, Name _ (Just (Array typ))) = Right (env, typ)
 scalarType pos (env, Name _ (Just typ@(Name _ _))) = scalarType pos (env, typ)
 scalarType pos mismatch = Left $ typeError pos [Array Unit] (Right mismatch)
 
-declareType :: TypeEnv
-               -> SourcePos
-               -> TypeName
-               -> Type
-               -> Either TypeError (TypeEnv, ProgramType)
+declaration :: TypeEnv ->
+               SourcePos ->
+               Declaration ->
+               Either TypeError (TypeEnv, ProgramType)
+declaration env pos (TypeDec name typ) = declareType env pos name typ
+declaration env pos (VarDec name typ exp) = declareVariable env pos name typ exp
+declaration env pos (FnDec name fields typ exp) = declareFn env pos name fields typ exp
+
+declareType :: TypeEnv ->
+               SourcePos ->
+               TypeName ->
+               Type ->
+               Either TypeError (TypeEnv, ProgramType)
 declareType env pos name (TypeId typeName) =
     addTypeBinding name id <$> (lookupType env typeName pos)
 declareType env pos name (ArrayOf typeName) =
@@ -290,12 +295,12 @@ addTypeBinding name aggregateConstructor (env, typ) =
      , Unit
      )
 
-declareVariable :: TypeEnv
-                   -> SourcePos
-                   -> Atom
-                   -> Maybe TypeName
-                   -> Expression
-                   -> Either TypeError (TypeEnv, ProgramType)
+declareVariable :: TypeEnv ->
+                   SourcePos ->
+                   Atom ->
+                   Maybe TypeName ->
+                   Expression ->
+                   Either TypeError (TypeEnv, ProgramType)
 declareVariable e pos name Nothing exp =
     addVarBinding name <$> typeCheck e exp
 declareVariable e pos name (Just typName) exp =
@@ -331,13 +336,13 @@ addVarScope env typs =
 popVarScope :: TypeEnv -> TypeEnv
 popVarScope env = env { vEnv = Env.popScope (vEnv env) }
 
-declareFn :: TypeEnv
-             -> SourcePos
-             -> Atom
-             -> [(Atom, TypeName)]
-             -> Maybe TypeName
-             -> Expression
-             -> Either TypeError (TypeEnv, ProgramType)
+declareFn :: TypeEnv ->
+             SourcePos ->
+             Atom ->
+             [(Atom, TypeName)] ->
+             Maybe TypeName ->
+             Expression ->
+             Either TypeError (TypeEnv, ProgramType)
 declareFn e pos name fields retTyp body =
     do
       args <- argTypes pos e fields
@@ -466,7 +471,7 @@ checkLet e pos decs exps =
     (\(e', typ) -> (unscope e', typ)) <$>
     (uniqTypeDecs decs pos >>
      uniqFnDecs decs pos >>
-      (foldM (\(e', _) dec -> typeCheck e' (DecExp pos dec)) (initializeLetScope decs $ scope e, Unit) decs >>=
+      (foldM (\(e', _) dec -> declaration e' pos dec) (initializeLetScope decs $ scope e, Unit) decs >>=
       (\(e', _) -> typeCheck e' (Sequence pos exps))))
     where scope env = env { tEnv = Env.pushScope [] (tEnv env)
                           , vEnv = Env.pushScope [] (vEnv env)
@@ -532,10 +537,10 @@ initializeLetScope ((FnDec name args typ _):ds) e =
                                          , sym = tbl
                                          })
 
-verifyType :: TypeEnv
-              -> ProgramType
-              -> Expression
-              -> Either TypeError (TypeEnv, ProgramType)
+verifyType :: TypeEnv ->
+              ProgramType ->
+              Expression ->
+              Either TypeError (TypeEnv, ProgramType)
 verifyType env typ (Nil _) = if isNullable typ
                              then Right (env, typ)
                              else Left $ show typ ++ " cannot be inhabited by nil"

@@ -536,8 +536,7 @@ spec = do
                                                            (tEnv emptyEnv)
                                    , sym = expectedTable
                                    }
-        typeCheck emptyEnv (DecExp dummyPos
-                                   (TypeDec "name" (TypeId "string")))
+        declaration emptyEnv dummyPos (TypeDec "name" (TypeId "string"))
           `shouldBe` Right (expectedEnv, Unit)
       it "puts the name type in the environment for a custom type" $ do
         let (person, table) = Sym.put "person" $ sym emptyEnv
@@ -552,8 +551,7 @@ spec = do
         let expectedEnv = env { tEnv = Env.addBinding (human, humanType) (tEnv env)
                               , sym = expectedTable
                               }
-        typeCheck env (DecExp dummyPos
-                              (TypeDec "human" (TypeId "person")))
+        declaration env dummyPos (TypeDec "human" (TypeId "person"))
           `shouldBe` Right (expectedEnv, Unit)
       it "constructs a custom array type" $ do
         let (numbers, table) = Sym.put "numbers" $ sym emptyEnv
@@ -562,8 +560,7 @@ spec = do
                                                            (tEnv emptyEnv)
                                    , sym = table
                                    }
-        typeCheck emptyEnv (DecExp dummyPos
-                                   (TypeDec "numbers" (ArrayOf "int")))
+        declaration emptyEnv dummyPos (TypeDec "numbers" (ArrayOf "int"))
           `shouldBe` Right (expectedEnv, Unit)
       it "constructs a custom record type" $ do
         let (person, table) = Sym.put "person" $ sym emptyEnv
@@ -574,10 +571,10 @@ spec = do
                                                            (tEnv emptyEnv)
                                    , sym = table
                                    }
-        typeCheck emptyEnv (DecExp dummyPos
-                                   (TypeDec "person" (RecordOf [ ("first_name", "string")
-                                                               , ("age", "int")
-                                                               ])))
+        declaration emptyEnv dummyPos (TypeDec "person"
+                                               (RecordOf [ ("first_name", "string")
+                                                         , ("age", "int")
+                                                         ]))
           `shouldBe` Right (expectedEnv, Unit)
     describe "typeCheck variable declaration" $ do
       it "sets the variable in the value environment to the type of the expression" $ do
@@ -585,14 +582,14 @@ spec = do
         let expectedEnv = emptyEnv { vEnv = Env.addBinding (x, TigerInt) (vEnv emptyEnv)
                                    , sym = table
                                    }
-        typeCheck emptyEnv (DecExp dummyPos (VarDec "x" Nothing (IntLiteral dummyPos 5)))
+        declaration emptyEnv dummyPos (VarDec "x" Nothing (IntLiteral dummyPos 5))
           `shouldBe` Right (expectedEnv, Unit)
       it "sets the variable to the expression type when it matches the provided type" $ do
         let (x, table) = Sym.put "x" $ sym emptyEnv
         let expectedEnv = emptyEnv { vEnv = Env.addBinding (x, TigerInt) (vEnv emptyEnv)
                                    , sym = table
                                    }
-        typeCheck emptyEnv (DecExp dummyPos (VarDec "x" (Just "int") (IntLiteral dummyPos 5)))
+        declaration emptyEnv dummyPos (VarDec "x" (Just "int") (IntLiteral dummyPos 5))
           `shouldBe` Right (expectedEnv, Unit)
       it "returns an error if the expression does not match the provided type" $ do
         let expPos = newPos "" 1 5
@@ -600,7 +597,7 @@ spec = do
         let expectedEnv = emptyEnv { vEnv = Env.addBinding (x, TigerInt) (vEnv emptyEnv)
                                    , sym = table
                                    }
-        typeCheck emptyEnv (DecExp dummyPos (VarDec "x" (Just "string") (IntLiteral expPos 5)))
+        declaration emptyEnv dummyPos (VarDec "x" (Just "string") (IntLiteral expPos 5))
           `shouldBe` Left (typeError expPos [TigerStr] (Right $ (emptyEnv, TigerInt)))
     describe "function declaration" $ do
       let (add, table) = Sym.put "add" $ sym emptyEnv
@@ -618,23 +615,24 @@ spec = do
         let pos8 = newPos "" 8 10
         let pos9 = newPos "" 9 10
         let Right (actEnv, Unit) =
-              typeCheck emptyEnv (DecExp dummyPos
-                                 (FnDec "factorial"
-                                        [ ("n", "int")
-                                        ]
-                                        (Just "int")
-                                        (IfThenElse pos1
-                                                    (BinOp pos2
-                                                           Equality
-                                                           (LValExp pos3 $ Id "n")
-                                                           (IntLiteral pos4 0))
-                                                    (IntLiteral pos5 1)
-                                                    (FunctionCall pos6
-                                                                  "factorial"
-                                                                  [BinOp pos7
-                                                                         Subtraction
-                                                                         (LValExp pos8 $ Id "n")
-                                                                         (IntLiteral pos9 1)]))))
+              declaration emptyEnv
+                          dummyPos
+                          (FnDec "factorial"
+                                [ ("n", "int")
+                                ]
+                                (Just "int")
+                                (IfThenElse pos1
+                                            (BinOp pos2
+                                                    Equality
+                                                    (LValExp pos3 $ Id "n")
+                                                    (IntLiteral pos4 0))
+                                            (IntLiteral pos5 1)
+                                            (FunctionCall pos6
+                                                          "factorial"
+                                                          [BinOp pos7
+                                                                  Subtraction
+                                                                  (LValExp pos8 $ Id "n")
+                                                                         (IntLiteral pos9 1)])))
 
         (sym actEnv) `shouldBe` table'
         (tEnv actEnv) `shouldBe` (tEnv emptyEnv)
@@ -642,63 +640,68 @@ spec = do
         types `shouldBe` [TigerInt]
         retTyp `shouldBe` TigerInt
       it "fails if the body does not typecheck" $ do
-        typeCheck emptyEnv (DecExp dummyPos
-                            (FnDec "add"
-                                  [ ("m", "int")
-                                  , ("n", "string")
-                                  ]
-                                  (Just "int")
-                                  (BinOp pos1
-                                          Addition
-                                          (LValExp pos2 (Id "m"))
-                                          (LValExp pos3 (Id "n")))))
+        declaration emptyEnv
+                    dummyPos
+                    (FnDec "add"
+                          [ ("m", "int")
+                          , ("n", "string")
+                          ]
+                          (Just "int")
+                          (BinOp pos1
+                                  Addition
+                                  (LValExp pos2 (Id "m"))
+                                  (LValExp pos3 (Id "n"))))
           `shouldBe` Left (typeError pos3 [TigerInt] (Right (emptyEnv, TigerStr)))
       it "fails if the body does not match the stated return type" $ do
-        typeCheck emptyEnv (DecExp dummyPos
-                            (FnDec "add"
-                                  [ ("m", "int")
-                                  , ("n", "int")
-                                  ]
-                                  (Just "string")
-                                  (BinOp pos1
-                                          Addition
-                                          (LValExp pos2 (Id "m"))
-                                          (LValExp pos3 (Id "n")))))
+        declaration emptyEnv
+                    dummyPos
+                    (FnDec "add"
+                          [ ("m", "int")
+                          , ("n", "int")
+                          ]
+                          (Just "string")
+                          (BinOp pos1
+                                  Addition
+                                  (LValExp pos2 (Id "m"))
+                                  (LValExp pos3 (Id "n"))))
           `shouldBe` Left (typeError pos1 [TigerStr] (Right (emptyEnv, TigerInt)))
       it ("enforces the return type of the body is Unit when return type is Nothing") $ do
         let (_, table') = Sym.put "n" table
         let (_, table'') = Sym.put "m" table'
-        typeCheck emptyEnv (DecExp dummyPos
-                            (FnDec "add"
-                                  [ ("m", "int")
-                                  , ("n", "int")
-                                  ]
-                                  Nothing
-                                  (BinOp pos1
-                                          Addition
-                                          (LValExp pos2 (Id "m"))
-                                          (LValExp pos3 (Id "n")))))
+        declaration emptyEnv
+                    dummyPos
+                    (FnDec "add"
+                          [ ("m", "int")
+                          , ("n", "int")
+                          ]
+                          Nothing
+                          (BinOp pos1
+                                  Addition
+                                  (LValExp pos2 (Id "m"))
+                                  (LValExp pos3 (Id "n"))))
           `shouldBe` Left (typeError pos1 [Unit] (Right (emptyEnv, TigerInt)))
       it "does ensure the body typechecks when the return type is Nothing" $ do
-        typeCheck emptyEnv (DecExp dummyPos
-                            (FnDec "add"
-                                  [ ("m", "int")
-                                  , ("n", "string")
-                                  ]
-                                  Nothing
-                                  (BinOp pos1
-                                          Addition
-                                          (LValExp pos2 (Id "m"))
-                                          (LValExp pos3 (Id "n")))))
+        declaration emptyEnv
+                    dummyPos
+                    (FnDec "add"
+                          [ ("m", "int")
+                          , ("n", "string")
+                          ]
+                          Nothing
+                          (BinOp pos1
+                                  Addition
+                                  (LValExp pos2 (Id "m"))
+                                  (LValExp pos3 (Id "n"))))
           `shouldBe` Left (typeError pos3 [TigerInt] (Right (emptyEnv, TigerStr)))
       it "typechecks a function with no arguments" $ do
         let (five, table) = Sym.put "five" $ sym emptyEnv
         let Right (actEnv, Unit) =
-              typeCheck emptyEnv (DecExp dummyPos
-                                         (FnDec "five"
-                                                 []
-                                                 (Just "int")
-                                                 (IntLiteral pos1 5)))
+              declaration emptyEnv
+                          dummyPos
+                          (FnDec "five"
+                                  []
+                                  (Just "int")
+                                  (IntLiteral pos1 5))
         (sym actEnv) `shouldBe` table
         (tEnv actEnv) `shouldBe` (tEnv emptyEnv)
         let (Just (Function types retTyp)) = Env.lookup five (vEnv actEnv)

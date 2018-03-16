@@ -25,7 +25,6 @@ data LValue =
     deriving (Show, Eq)
 data Expression =
     LValExp SourcePos LValue
-    | DecExp SourcePos Declaration
     | ValuelessExpression SourcePos Expression
     | Nil SourcePos
     | Sequence SourcePos [Expression]
@@ -76,7 +75,6 @@ instance Ord Operator where
 
 position :: Expression -> SourcePos
 position (LValExp pos _) = pos
-position (DecExp pos _) = pos
 position (ValuelessExpression pos _) = pos
 position (Nil pos) = pos
 position (Sequence pos _) = pos

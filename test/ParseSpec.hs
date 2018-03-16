@@ -19,14 +19,20 @@ spec = do
       (take (length errorPrefix)) <$> (lefts [parse "1id"]) `shouldBe` [errorPrefix]
   describe "preparing program" $ do
     it "parses program without caring about comments" $ do
-      parse "var /* variable declaration */ x /* named x */:int /* type integer */ := /* equals */ 5 /* five */"
-        `shouldBe` Right (DecExp (position 1) $ VarDec "x" (Just "int") (IntLiteral (position 79) 5))
+      parse "let\nvar /* variable declaration */ x /* named x */:int /* type integer */ := /* equals */ 5 /* five */\nin x end"
+        `shouldBe` Right (Let (position 1)
+                              [VarDec "x" (Just "int") (IntLiteral (newPos "" 2 79) 5)]
+                              [LValExp (newPos "" 3 4) (Id "x")])
     it "strips multiline comments" $ do
-      parse "var x /* multiline\ncomment */ := 5"
-        `shouldBe` Right (DecExp (position 1) $ VarDec "x" Nothing (IntLiteral (newPos "" 2 15) 5))
+      parse "let\nvar /* multiline\ncomment */ x /* named x */:int /* type integer */ := /* equals */ 5 /* five */\nin x end"
+        `shouldBe` Right (Let (position 1)
+                              [VarDec "x" (Just "int") (IntLiteral (newPos "" 3 61) 5)]
+                              [LValExp (newPos "" 4 4) (Id "x")])
     it "strips leading whitespace left by comments" $ do
-      parse "/* hello! */ var /* variable declaration */ x /* named x */:int /* type integer */ := /* equals */ 5 /* five */"
-        `shouldBe` Right (DecExp (position 12) $ VarDec "x" (Just "int") (IntLiteral (position 90) 5))
+      parse "/* hello! */ let\nvar /* multiline\ncomment */ x /* named x */:int /* type integer */ := /* equals */ 5 /* five */\nin x end"
+        `shouldBe` Right (Let (position 12)
+                              [VarDec "x" (Just "int") (IntLiteral (newPos "" 3 61) 5)]
+                              [LValExp (newPos "" 4 4) (Id "x")])
   describe "reserved words" $ do
     let reservedWords = [ "let"
                         , "in"
@@ -163,13 +169,15 @@ spec = do
       Parsec.parse noValueParser "" "( )" `shouldBe` Right ()
   describe "parsing sequence of expressions" $ do
     it "returns a list of parsed expressions" $ do
-      Parsec.parse sequenceParser "" "var x := y; var z := x"
-        `shouldBe` Right ([(DecExp (position 1) $ VarDec "x" Nothing (LValExp (position 10) $ Id "y")),
-                           (DecExp (position 13) $ VarDec "z" Nothing (LValExp (position 22) $ Id "x"))])
+      Parsec.parse sequenceParser "" "x := y; z := x"
+        `shouldBe` Right ([ (Assignment (position 1) (Id "x") (LValExp (position 6) $ Id "y"))
+                          , (Assignment (position 9) (Id "z") (LValExp (position 14) $ Id "x"))
+                          ])
     it "allows spaces within the list" $ do
-      Parsec.parse sequenceParser "" "var x := y ; var z := x"
-        `shouldBe` Right ([(DecExp (position 1) $ VarDec "x" Nothing (LValExp (position 10) $ Id "y")),
-                           (DecExp (position 14) $ VarDec "z" Nothing (LValExp (position 23) $ Id "x"))])
+      Parsec.parse sequenceParser "" "x := y ; z := x"
+        `shouldBe` Right ([ (Assignment (position 1) (Id "x") (LValExp (position 6) $ Id "y"))
+                          , (Assignment (position 10) (Id "z") (LValExp (position 15) $ Id "x"))
+                          ])
     it "parses sequences of array access assignments with embedded arithmetic" $ do
       Parsec.parse sequenceParser "" "row[r]:=1; diag1[r+c]:=1; diag2[r+7-c]:=1"
         `shouldBe` Right ([ Assignment (position 1)
