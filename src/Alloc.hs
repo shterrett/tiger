@@ -14,6 +14,7 @@ import FrameExp ( Level(..)
                 , LValue(..)
                 , Declaration(..)
                 , VarEnv(..)
+                , valueDec
                 )
 
 newLevel :: Frame.Frame a =>
@@ -84,14 +85,15 @@ allocLet :: Frame.Frame a =>
             FExp a
 allocLet le pos decs exps =
     let
-      (le', decs') = mapAccumL allocDec le decs
+      valueDecs = filter valueDec decs
+      (le', decs') = mapAccumL allocDec le valueDecs
     in
       Let pos le' decs' (fmap (alloc le') exps)
 
 allocDec :: Frame.Frame a => LEnv a -> AST.Declaration -> (LEnv a, Declaration a)
-allocDec le (AST.TypeDec name typ) = (le, TypeDec name typ)
 allocDec le (AST.VarDec name typ exp) = allocVar le name exp
 allocDec le (AST.FnDec name fields typ exp) = allocFn le name fields exp
+allocDec _ (AST.TypeDec _ _) = undefined
 
 allocVar :: Frame.Frame a =>
             LEnv a ->
@@ -123,4 +125,4 @@ allocFn (LEnv newFrame env level) name fields body =
       (table'', level') = newLevel newFrame level label (fmap (const Frame.Escape) fields) table'
       le' = LEnv newFrame (env { sym = table'' }) level'
     in
-      (le', FnDec name fields (alloc le' body))
+      (le', FnDec name (fmap fst fields) (alloc le' body))

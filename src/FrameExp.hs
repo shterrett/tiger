@@ -6,8 +6,6 @@ import qualified Environment as Env
 import qualified Frame
 import AST ( Atom
            , TypeName
-           , TypeFields
-           , Type
            , Operator
            )
 
@@ -30,9 +28,8 @@ data Frame.Frame a => LEnv a = LEnv (Frame.NewFrame a) (VarEnv a) (Level a)
                    deriving (Show, Eq)
 
 data Frame.Frame a => Declaration a =
-    TypeDec TypeName Type
-    | VarDec Atom (FExp a)
-    | FnDec Atom TypeFields (FExp a)
+    VarDec Atom (FExp a)
+    | FnDec Atom [Atom] (FExp a)
     deriving (Show, Eq)
 data Frame.Frame a => LValue a =
     Id Atom
@@ -62,3 +59,7 @@ data Frame.Frame a => FExp a =
     | Let SourcePos (LEnv a) [Declaration a] [(FExp a)]
     | Grouped SourcePos (LEnv a) (FExp a)
     deriving (Show, Eq)
+
+valueDec :: AST.Declaration -> Bool
+valueDec (TypeDec _ _) = False
+valueDec _ = True
