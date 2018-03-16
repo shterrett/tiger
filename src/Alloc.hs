@@ -1,6 +1,7 @@
 module Alloc where
 
 import Data.List (mapAccumL)
+import Data.Tuple (swap)
 import Text.Parsec.Pos (SourcePos)
 import qualified Symbol as Sym
 import qualified Environment as Env
@@ -50,7 +51,7 @@ locals :: Frame.Frame a => Level a -> [Access a]
 locals Outermost = []
 locals l@(Nested _ frame) = (Access l) <$> (Frame.locals frame)
 
-alloc :: Frame.Frame a => LEnv a -> AST.Expression -> (FExp a)
+alloc :: Frame.Frame a => LEnv a -> AST.Expression -> FExp a
 alloc le (AST.Nil pos) = Nil pos le
 alloc le (AST.ValuelessExpression pos exp) = ValuelessExpression pos le (alloc le exp)
 alloc le (AST.NoValue pos) = NoValue pos le
@@ -68,7 +69,7 @@ alloc le (AST.Assignment pos lval exp) = Assignment pos le (allocLVal le lval) (
 alloc le (AST.FunctionCall pos fn exps) = FunctionCall pos le fn (fmap (alloc le) exps)
 alloc le (AST.IfThenElse pos bool truthy falsey) = IfThenElse pos le (alloc le bool) (alloc le truthy) (alloc le falsey)
 alloc le (AST.IfThen pos bool truthy) = IfThen pos le (alloc le bool) (alloc le truthy)
-alloc le (AST.For pos idx fm to body) = For pos le idx (alloc le fm) (alloc le to) (alloc le body)
+alloc le (AST.For pos idx fm to body) = allocFor pos le idx fm to body
 alloc le (AST.While pos bool body) = While pos le (alloc le bool) (alloc le body)
 alloc le (AST.Let pos decs exps) = allocLet le pos decs exps
 
@@ -100,17 +101,11 @@ allocVar :: Frame.Frame a =>
             AST.Atom ->
             AST.Expression ->
             (LEnv a, Declaration a)
-allocVar (LEnv newFrame env level) name exp =
+allocVar le name exp =
     let
-      ((table, level'), access) = allocLocal Frame.Escape level (sym env)
-      (var, table') = Sym.put name table
-      le = LEnv newFrame
-                (env { vEnv = Env.addBinding (var, access) (vEnv env)
-                     , sym = table'
-                     })
-                level'
+      (le', _) = addLocalBinding le name
     in
-      (le, VarDec name (alloc le exp))
+      (le', VarDec name (alloc le' exp))
 
 allocFn :: Frame.Frame a =>
            LEnv a ->
@@ -120,9 +115,57 @@ allocFn :: Frame.Frame a =>
            (LEnv a, Declaration a)
 allocFn (LEnv newFrame env level) name fields body =
     let
+      formalNames = fmap fst fields
       (label, table) = Tmp.newLabel (sym env)
       (fn, table') = Sym.put name table
       (table'', level') = newLevel newFrame level label (fmap (const Frame.Escape) fields) table'
-      le' = LEnv newFrame (env { sym = table'' }) level'
+      (table''', varEnv) = pushFormals formalNames level' table'' (vEnv env)
+      le' = LEnv newFrame (env { sym = table'''
+                               , vEnv = varEnv
+                               })
+                          level'
     in
-      (le', FnDec name (fmap fst fields) (alloc le' body))
+      (le', FnDec name formalNames (alloc le' body))
+
+pushFormals :: Frame.Frame a =>
+               [AST.Atom] ->
+               Level a ->
+               Sym.SymbolTable ->
+               Env.Environment (Access a) ->
+               (Sym.SymbolTable, Env.Environment (Access a))
+pushFormals names level table varEnv =
+    let
+      (table', symbols) = mapAccumL (\t n -> swap $ Sym.put n t) table names
+    in
+      (table', Env.pushScope (zip symbols (formals level)) varEnv)
+
+allocFor :: Frame.Frame a =>
+            SourcePos ->
+            LEnv a ->
+            AST.Atom ->
+            AST.Expression ->
+            AST.Expression ->
+            AST.Expression ->
+            FExp a
+allocFor pos le idx fm to exp =
+    let
+      (le', _) = addLocalBinding le idx
+    in
+      For pos le' idx (alloc le' fm) (alloc le' to) (alloc le' exp)
+
+addLocalBinding :: Frame.Frame a =>
+                   LEnv a ->
+                   AST.Atom ->
+                   (LEnv a, Sym.Symbol)
+addLocalBinding (LEnv newFrame env level) name =
+    let
+      ((table, level'), access) = allocLocal Frame.Escape level (sym env)
+      (var, table') = Sym.put name table
+      le = LEnv newFrame
+                (env { vEnv = Env.addBinding (var, access) (vEnv env)
+                     , sym = table'
+                     })
+                level'
+    in
+      (le, var)
+

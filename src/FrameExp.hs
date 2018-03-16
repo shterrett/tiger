@@ -8,6 +8,7 @@ import AST ( Atom
            , TypeName
            , Operator
            )
+import qualified AST (Declaration(TypeDec))
 
 data Frame.Frame a => Level a =
     Outermost
@@ -61,5 +62,5 @@ data Frame.Frame a => FExp a =
     deriving (Show, Eq)
 
 valueDec :: AST.Declaration -> Bool
-valueDec (TypeDec _ _) = False
+valueDec (AST.TypeDec _ _) = False
 valueDec _ = True
