@@ -1,19 +1,32 @@
 module Alloc where
 
+import Data.List (mapAccumL)
+import Text.Parsec.Pos (SourcePos)
 import qualified Symbol as Sym
+import qualified Environment as Env
 import qualified Temporary as Tmp
 import qualified Frame
+import qualified AST
 import FrameExp ( Level(..)
                 , Access(..)
+                , LEnv(..)
+                , FExp(..)
+                , LValue(..)
+                , Declaration(..)
+                , VarEnv(..)
                 )
 
-newLevel :: Level Frame.X86Frame ->
+newLevel :: Frame.Frame a =>
+            Frame.NewFrame a ->
+            Level a ->
             Tmp.Label ->
             [Frame.Var] ->
             Sym.SymbolTable ->
-            (Sym.SymbolTable, Level Frame.X86Frame)
-newLevel l n fs tbl =
-    let frame = Frame.newX86Frame n (Frame.Escape:fs) tbl
+            (Sym.SymbolTable, Level a)
+newLevel newFrame l n fs tbl =
+    let
+      frameBuilder = Frame.getFn newFrame
+      frame = frameBuilder n (Frame.Escape:fs) tbl
     in (Nested l) <$> frame
 
 formals :: Frame.Frame a => Level a -> [Access a]
@@ -35,3 +48,79 @@ allocLocal v (Nested parent frame) tbl =
 locals :: Frame.Frame a => Level a -> [Access a]
 locals Outermost = []
 locals l@(Nested _ frame) = (Access l) <$> (Frame.locals frame)
+
+alloc :: Frame.Frame a => LEnv a -> AST.Expression -> (FExp a)
+alloc le (AST.Nil pos) = Nil pos le
+alloc le (AST.ValuelessExpression pos exp) = ValuelessExpression pos le (alloc le exp)
+alloc le (AST.NoValue pos) = NoValue pos le
+alloc le (AST.Break pos) = Break pos le
+alloc le (AST.IntLiteral pos int) = IntLiteral pos le int
+alloc le (AST.StringLiteral pos str) = StringLiteral pos le str
+alloc le (AST.Negation pos exp) = Negation pos le (alloc le exp)
+alloc le (AST.BinOp pos op exp1 exp2) = BinOp pos le op (alloc le exp1) (alloc le exp2)
+alloc le (AST.Grouped pos exp) = Grouped pos le (alloc le exp)
+alloc le (AST.Sequence pos exps) = Sequence pos le (fmap (alloc le) exps)
+alloc le (AST.ArrayCreation pos name exp1 exp2) = ArrayCreation pos le name (alloc le exp1) (alloc le exp2)
+alloc le (AST.RecordCreation pos name fields) = RecordCreation pos le name ((fmap . fmap) (alloc le) fields)
+alloc le (AST.LValExp pos lval) = LValExp pos le (allocLVal le lval)
+alloc le (AST.Assignment pos lval exp) = Assignment pos le (allocLVal le lval) (alloc le exp)
+alloc le (AST.FunctionCall pos fn exps) = FunctionCall pos le fn (fmap (alloc le) exps)
+alloc le (AST.IfThenElse pos bool truthy falsey) = IfThenElse pos le (alloc le bool) (alloc le truthy) (alloc le falsey)
+alloc le (AST.IfThen pos bool truthy) = IfThen pos le (alloc le bool) (alloc le truthy)
+alloc le (AST.For pos idx fm to body) = For pos le idx (alloc le fm) (alloc le to) (alloc le body)
+alloc le (AST.While pos bool body) = While pos le (alloc le bool) (alloc le body)
+alloc le (AST.Let pos decs exps) = allocLet le pos decs exps
+
+allocLVal :: Frame.Frame a => LEnv a -> AST.LValue -> LValue a
+allocLVal _ (AST.Id name) = Id name
+allocLVal le (AST.RecordAccess lval name) = RecordAccess (allocLVal le lval) name
+allocLVal le (AST.ArraySubscript lval exp) = ArraySubscript (allocLVal le lval) (alloc le exp)
+
+allocLet :: Frame.Frame a =>
+            LEnv a ->
+            SourcePos ->
+            [AST.Declaration] ->
+            [AST.Expression] ->
+            FExp a
+allocLet le pos decs exps =
+    let
+      (le', decs') = mapAccumL allocDec le decs
+    in
+      Let pos le' decs' (fmap (alloc le') exps)
+
+allocDec :: Frame.Frame a => LEnv a -> AST.Declaration -> (LEnv a, Declaration a)
+allocDec le (AST.TypeDec name typ) = (le, TypeDec name typ)
+allocDec le (AST.VarDec name typ exp) = allocVar le name exp
+allocDec le (AST.FnDec name fields typ exp) = allocFn le name fields exp
+
+allocVar :: Frame.Frame a =>
+            LEnv a ->
+            AST.Atom ->
+            AST.Expression ->
+            (LEnv a, Declaration a)
+allocVar (LEnv newFrame env level) name exp =
+    let
+      ((table, level'), access) = allocLocal Frame.Escape level (sym env)
+      (var, table') = Sym.put name table
+      le = LEnv newFrame
+                (env { vEnv = Env.addBinding (var, access) (vEnv env)
+                     , sym = table'
+                     })
+                level'
+    in
+      (le, VarDec name (alloc le exp))
+
+allocFn :: Frame.Frame a =>
+           LEnv a ->
+           AST.Atom ->
+           AST.TypeFields ->
+           AST.Expression ->
+           (LEnv a, Declaration a)
+allocFn (LEnv newFrame env level) name fields body =
+    let
+      (label, table) = Tmp.newLabel (sym env)
+      (fn, table') = Sym.put name table
+      (table'', level') = newLevel newFrame level label (fmap (const Frame.Escape) fields) table'
+      le' = LEnv newFrame (env { sym = table'' }) level'
+    in
+      (le', FnDec name fields (alloc le' body))

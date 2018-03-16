@@ -1,6 +1,5 @@
 module FrameExp where
 
-
 import Text.Parsec.Pos (SourcePos)
 import qualified Symbol as Sym
 import qualified Environment as Env
@@ -27,13 +26,13 @@ data Frame.Frame a => VarEnv a =
            }
            deriving (Show, Eq)
 
-data Frame.Frame a => LEnv a = LEnv (VarEnv a) (Level a)
+data Frame.Frame a => LEnv a = LEnv (Frame.NewFrame a) (VarEnv a) (Level a)
                    deriving (Show, Eq)
 
 data Frame.Frame a => Declaration a =
     TypeDec TypeName Type
-    | VarDec Atom (Maybe TypeName) (FExp a)
-    | FnDec Atom TypeFields (Maybe TypeName) (FExp a)
+    | VarDec Atom (FExp a)
+    | FnDec Atom TypeFields (FExp a)
     deriving (Show, Eq)
 data Frame.Frame a => LValue a =
     Id Atom

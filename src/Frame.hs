@@ -19,6 +19,15 @@ class Frame a where
     locals :: a -> [Access]
     allocLocal :: Var -> a -> Sym.SymbolTable -> ((Sym.SymbolTable, a), Access)
 
+data Frame a => NewFrame a = NewFrame {
+                  getFn :: Tmp.Label -> [Var] -> Sym.SymbolTable -> (Sym.SymbolTable, a)
+                }
+instance Frame a => Show (NewFrame a) where
+  show _ = "NewFrame"
+instance Frame a => Eq (NewFrame a) where
+  (==) _ _ = False
+
+
 data X86Frame = X86Frame { x86_name :: Tmp.Label
                          , x86_formals :: [Access]
                          , x86_locals :: [Access]
