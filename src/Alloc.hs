@@ -120,12 +120,16 @@ allocFn (LEnv newFrame env level) name fields body =
       (fn, table') = Sym.put name table
       (table'', level') = newLevel newFrame level label (fmap (const Frame.Escape) fields) table'
       (table''', varEnv) = pushFormals formalNames level' table'' (vEnv env)
-      le' = LEnv newFrame (env { sym = table'''
-                               , vEnv = varEnv
-                               })
-                          level'
+      le' = LEnv newFrame
+                 (env { sym = table'''
+                      , vEnv = varEnv
+                      })
+                 level'
     in
-      (le', FnDec name formalNames (alloc le' body))
+      ( LEnv newFrame
+             (env { sym = table''' })
+             level
+      , FnDec name formalNames (alloc le' body))
 
 pushFormals :: Frame.Frame a =>
                [AST.Atom] ->
