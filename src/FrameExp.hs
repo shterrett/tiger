@@ -10,34 +10,34 @@ import AST ( Atom
            )
 import qualified AST (Declaration(TypeDec))
 
-data Frame.Frame a => Level a =
+data Level a =
     Outermost
     | Nested (Level a) a
     deriving (Show, Eq)
 
-data Frame.Frame a => Access a =
+data Access a =
     Access (Level a) Frame.Access
     deriving (Show, Eq)
 
-data Frame.Frame a => VarEnv a =
+data VarEnv a =
     VarEnv { vEnv :: Env.Environment (Access a)
            , sym :: Sym.SymbolTable
            }
            deriving (Show, Eq)
 
-data Frame.Frame a => LEnv a = LEnv (Frame.NewFrame a) (VarEnv a) (Level a)
+data LEnv a = LEnv (Frame.NewFrame a) (VarEnv a) (Level a)
                    deriving (Show, Eq)
 
-data Frame.Frame a => Declaration a =
+data  Declaration a =
     VarDec Atom (FExp a)
     | FnDec Atom [Atom] (FExp a)
     deriving (Show, Eq)
-data Frame.Frame a => LValue a =
+data LValue a =
     Id Atom
     | RecordAccess (LValue a) Atom
     | ArraySubscript (LValue a) (FExp a)
     deriving (Show, Eq)
-data Frame.Frame a => FExp a =
+data FExp a =
     LValExp SourcePos (LEnv a) (LValue a)
     | DecExp SourcePos (LEnv a) (Declaration a)
     | ValuelessExpression SourcePos (LEnv a) (FExp a)

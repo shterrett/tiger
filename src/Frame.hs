@@ -19,7 +19,7 @@ class Frame a where
     locals :: a -> [Access]
     allocLocal :: Var -> a -> Sym.SymbolTable -> ((Sym.SymbolTable, a), Access)
 
-data Frame a => NewFrame a = NewFrame {
+data NewFrame a = NewFrame {
                   getFn :: Tmp.Label -> [Var] -> Sym.SymbolTable -> (Sym.SymbolTable, a)
                 }
 instance Frame a => Show (NewFrame a) where
