@@ -11,7 +11,7 @@ import AST ( Atom
 import qualified AST (Declaration(TypeDec))
 
 data Level a =
-    Outermost
+    Outermost a
     | Nested (Level a) a
     deriving (Show, Eq)
 
@@ -30,7 +30,7 @@ data LEnv a = LEnv (Frame.NewFrame a) (VarEnv a) (Level a)
 
 data  Declaration a =
     VarDec Atom (FExp a)
-    | FnDec Atom [Atom] (FExp a)
+    | FnDec (LEnv a) Atom [Atom] (FExp a)
     deriving (Show, Eq)
 data LValue a =
     Id Atom
@@ -39,7 +39,6 @@ data LValue a =
     deriving (Show, Eq)
 data FExp a =
     LValExp SourcePos (LEnv a) (LValue a)
-    | DecExp SourcePos (LEnv a) (Declaration a)
     | ValuelessExpression SourcePos (LEnv a) (FExp a)
     | Nil SourcePos (LEnv a)
     | Sequence SourcePos (LEnv a) [(FExp a)]

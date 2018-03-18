@@ -25,7 +25,7 @@ data NewFrame a = NewFrame {
 instance Frame a => Show (NewFrame a) where
   show _ = "NewFrame"
 instance Frame a => Eq (NewFrame a) where
-  (==) _ _ = False
+  (==) _ _ = True
 
 
 data X86Frame = X86Frame { x86_name :: Tmp.Label

@@ -32,7 +32,7 @@ newLevel newFrame l n fs tbl =
     in (Nested l) <$> frame
 
 formals :: Frame.Frame a => Level a -> [Access a]
-formals Outermost = []
+formals (Outermost _) = []
 formals l@(Nested _ frame) = (Access l) <$>  drop 1 (Frame.formals frame)
 
 allocLocal :: Frame.Frame a =>
@@ -40,7 +40,11 @@ allocLocal :: Frame.Frame a =>
               Level a ->
               Sym.SymbolTable ->
               ((Sym.SymbolTable, Level a), Access a)
-allocLocal v Outermost tbl = undefined
+allocLocal v (Outermost frame) tbl =
+    let
+      ((tbl', frame'), local) = Frame.allocLocal v frame tbl
+      level = Outermost frame'
+    in ((tbl', level), Access level local)
 allocLocal v (Nested parent frame) tbl =
     let
       ((tbl', frame'), local) = Frame.allocLocal v frame tbl
@@ -48,7 +52,7 @@ allocLocal v (Nested parent frame) tbl =
     in ((tbl', level), Access level local)
 
 locals :: Frame.Frame a => Level a -> [Access a]
-locals Outermost = []
+locals l@(Outermost frame) = (Access l) <$> (Frame.locals frame)
 locals l@(Nested _ frame) = (Access l) <$> (Frame.locals frame)
 
 alloc :: Frame.Frame a => LEnv a -> AST.Expression -> FExp a
@@ -126,10 +130,8 @@ allocFn (LEnv newFrame env level) name fields body =
                       })
                  level'
     in
-      ( LEnv newFrame
-             (env { sym = table''' })
-             level
-      , FnDec name formalNames (alloc le' body))
+      ( fst $ addLocalBinding (LEnv newFrame (env { sym = table''' }) level) name
+      , FnDec le' name formalNames (alloc le' body))
 
 pushFormals :: Frame.Frame a =>
                [AST.Atom] ->
