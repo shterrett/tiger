@@ -3,7 +3,7 @@ module Builtins where
 import Data.Maybe (catMaybes)
 import qualified Environment as Env
 import qualified Symbol as Sym
-import Typing ( ProgramType(..)
+import Types ( ProgramType(..)
               , TypeEnv(..)
               )
 

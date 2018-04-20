@@ -13,6 +13,16 @@ import AST ( Expression(..)
            )
 import Text.Parsec.Pos (initialPos, newPos)
 import Typing
+import Types ( TypeInfo
+             , ProgramType(..)
+             , TypeEnv(..)
+             , TypeError
+             , mapEnv
+             , mapType
+             , TExp
+             , Declarable(..)
+             , isNullable
+             )
 
 spec = do
     let initialTypes =

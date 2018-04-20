@@ -7,6 +7,16 @@ import qualified Environment as Env
 import qualified Symbol as Sym
 import Parse (parse)
 import Typing
+import Types ( TypeInfo
+             , ProgramType(..)
+             , TypeEnv(..)
+             , TypeError
+             , mapEnv
+             , mapType
+             , TExp
+             , Declarable(..)
+             , isNullable
+             )
 import Builtins (initialTypeEnv)
 
 checkTest :: String -> IO (Either TypeError (TypeEnv, ProgramType))

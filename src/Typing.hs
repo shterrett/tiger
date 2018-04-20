@@ -2,8 +2,7 @@ module Typing where
 
 import Text.Parsec.Pos (SourcePos)
 import Control.Monad (foldM)
-import Data.List ( intersect
-                 , intersperse
+import Data.List ( intersperse
                  , foldr1
                  , foldl'
                  , nub
@@ -22,89 +21,21 @@ import AST ( Expression(..)
            , position
            , Atom
            )
+import Types ( TypeInfo
+             , ProgramType(..)
+             , TypeEnv(..)
+             , TypeError
+             , mapEnv
+             , mapType
+             , TExp
+             , Declarable(..)
+             , isNullable
+             )
+import qualified Types as T
 import qualified Symbol as Sym
 import qualified Environment as Env
 
-data ProgramType =
-    TigerInt
-    | TigerStr
-    | Record [(Atom, ProgramType)]
-    | Array ProgramType
-    | Unit
-    | Name Sym.Symbol (Maybe ProgramType)
-    | Function [ProgramType] ProgramType
-
-instance Show ProgramType where
-    show TigerInt = "Integer"
-    show TigerStr = "String"
-    show (Record fields) = "{" ++ show fields ++ "}"
-    show (Array typ) = "[" ++ show typ ++ "]"
-    show Unit = "()"
-    show (Name name _) = show name
-    show (Function args return) = "fn" ++
-                                  "(" ++ show args ++ ")" ++
-                                  " : " ++ show return
-
-instance Eq ProgramType where
-    (==) (TigerInt) (TigerInt) = True
-    (==) (TigerStr) (TigerStr) = True
-    (==) Unit Unit = True
-    (==) n@(Name _ _) m@(Name _ _) = cmpAliasTypes n m
-    (==) (Name _ (Just t1)) t2 = t1 == t2
-    (==) t1 (Name _ (Just t2)) = t1 == t2
-    (==) _ _ = False
-
-cmpAliasTypes :: ProgramType -> ProgramType -> Bool
-cmpAliasTypes m@(Name _ t1) n@(Name _ t2) =
-    if intersect (aliasChain m) (aliasChain n) == []
-      then t1 == t2
-      else True
-
-aliasChain :: ProgramType -> [Sym.Symbol]
-aliasChain (Name n (Just t)) = n:(aliasChain t)
-aliasChain (Name n Nothing) = [n]
-aliasChain _ = []
-
-isNullable :: ProgramType -> Bool
-isNullable TigerInt = False
-isNullable TigerStr = False
-isNullable (Record _) = True
-isNullable (Array _) = False
-isNullable Unit = False
-isNullable (Name _ (Just t)) = isNullable t
-isNullable (Name _ Nothing) = True
-isNullable (Function _ _) = False
-
-data TypeEnv = TypeEnv { tEnv :: Env.Environment ProgramType
-                       , vEnv :: Env.Environment ProgramType
-                       , sym :: Sym.SymbolTable
-                       }
-  deriving(Show, Eq)
-
-type TypeError = String
-
-data Declarable = Field
-               | Identifier
-               | Type
-               | Fn
-instance Show Declarable where
-    show Field = "field"
-    show Identifier = "identifier"
-    show Type = "type"
-    show Fn = "function"
-
-mapEnv :: (TypeEnv -> TypeEnv) ->
-          Either TypeError (TypeEnv, ProgramType) ->
-          Either TypeError (TypeEnv, ProgramType)
-mapEnv _ res@(Left _) = res
-mapEnv f (Right (e, t)) = Right (f e, t)
-
-mapType :: (ProgramType -> ProgramType) ->
-           Either TypeError (TypeEnv, ProgramType) ->
-           Either TypeError (TypeEnv, ProgramType)
-mapType = fmap . fmap
-
-typeCheck :: TypeEnv -> Expression -> Either TypeError (TypeEnv, ProgramType)
+typeCheck :: TypeEnv -> Expression -> Either TypeError TypeInfo
 typeCheck e (Nil pos) = Left $ "Cannot infer the type of nil at " ++ show pos
 typeCheck e (ValuelessExpression _ _) = Right (e, Unit)
 typeCheck e (NoValue _) = Right (e, Unit)
@@ -138,7 +69,7 @@ checkBinOp :: TypeEnv ->
               Operator ->
               Expression ->
               Expression ->
-              Either TypeError (TypeEnv, ProgramType)
+              Either TypeError TypeInfo
 checkBinOp e pos op exp1 exp2
     | op `elem` [Addition, Subtraction, Multiplication, Division, And, Or] =
       foldM (\(e', typ) exp -> verifyType e' TigerInt exp) (e, TigerInt) [exp1, exp2]
@@ -160,7 +91,7 @@ checkArray :: TypeEnv ->
               TypeName ->
               Expression ->
               Expression ->
-              Either TypeError (TypeEnv, ProgramType)
+              Either TypeError TypeInfo
 checkArray env pos name lengthExp initExp =
     (lookupType env name pos) >>= checkArrayType >>= checkLengthExp >>= checkScalarExp
     where checkArrayType typ@(_, Name _ (Just (Array _))) = Right typ
@@ -178,7 +109,7 @@ checkRecord :: TypeEnv
                -> SourcePos
                -> TypeName
                -> [(Atom, Expression)]
-               -> Either TypeError (TypeEnv, ProgramType)
+               -> Either TypeError TypeInfo
 checkRecord env pos name fields =
     (lookupType env name pos) >>= checkRecordType >>= verifyTypesPresent >>= checkFieldsTypes
     where checkRecordType typ@(_, Name _ (Just (Record _))) = Right typ
@@ -209,7 +140,7 @@ checkRecordAccess :: TypeEnv
                      -> SourcePos
                      -> LValue
                      -> Atom
-                     -> Either TypeError (TypeEnv, ProgramType)
+                     -> Either TypeError TypeInfo
 checkRecordAccess env pos (Id record) field =
     lookupValue env record pos >>= recordFields pos >>= recordFieldType pos field
 checkRecordAccess env pos (RecordAccess record' field') field =
@@ -217,13 +148,13 @@ checkRecordAccess env pos (RecordAccess record' field') field =
 checkRecordAccess env pos (ArraySubscript array exp) field =
    arrayElementType env pos array >>= recordFields pos >>= recordFieldType pos field
 
-recordFields :: SourcePos -> (TypeEnv, ProgramType) -> Either TypeError (TypeEnv, [(Atom, ProgramType)])
+recordFields :: SourcePos -> TypeInfo -> Either TypeError (TypeEnv, [(Atom, ProgramType)])
 recordFields pos (env, (Record fields)) = Right (env, fields)
 recordFields pos (env, (Name _ (Just (Record fields)))) = Right (env, fields)
 recordFields pos (env, (Name _ (Just typ@(Name _ _)))) = recordFields pos (env, typ)
 recordFields pos mismatch = Left $ typeError pos [Record []] (Right mismatch)
 
-recordFieldType :: SourcePos -> Atom -> (TypeEnv, [(Atom, ProgramType)]) -> Either TypeError (TypeEnv, ProgramType)
+recordFieldType :: SourcePos -> Atom -> (TypeEnv, [(Atom, ProgramType)]) -> Either TypeError TypeInfo
 recordFieldType pos field (env, fields) = (,) env <$>
     maybeToEither (lookup field fields) (undeclaredError Field pos field)
 
@@ -231,7 +162,7 @@ checkArraySubscript :: TypeEnv
                        -> SourcePos
                        -> LValue
                        -> Expression
-                       -> Either TypeError (TypeEnv, ProgramType)
+                       -> Either TypeError TypeInfo
 checkArraySubscript env pos arr@(ArraySubscript arr' exp') exp =
     verifyType env TigerInt exp' >>=
       (\(env', _) -> verifyType env' TigerInt exp) >>=
@@ -246,10 +177,10 @@ checkArraySubscript env pos lval@(Id _) exp =
 arrayElementType :: TypeEnv ->
                     SourcePos ->
                     LValue ->
-                    Either TypeError (TypeEnv, ProgramType)
+                    Either TypeError TypeInfo
 arrayElementType env pos lval = typeCheck env (LValExp pos lval) >>= scalarType pos
 
-scalarType :: SourcePos -> (TypeEnv, ProgramType) -> Either TypeError (TypeEnv, ProgramType)
+scalarType :: SourcePos -> TypeInfo -> Either TypeError TypeInfo
 scalarType _ (env, Array typ) = Right (env, typ)
 scalarType _ (env, Name _ (Just (Array typ))) = Right (env, typ)
 scalarType pos (env, Name _ (Just typ@(Name _ _))) = scalarType pos (env, typ)
@@ -259,7 +190,7 @@ declareType :: TypeEnv
                -> SourcePos
                -> TypeName
                -> Type
-               -> Either TypeError (TypeEnv, ProgramType)
+               -> Either TypeError TypeInfo
 declareType env pos name (TypeId typeName) =
     addTypeBinding name id <$> (lookupType env typeName pos)
 declareType env pos name (ArrayOf typeName) =
@@ -277,8 +208,8 @@ declareType env pos name (RecordOf fields) =
 
 addTypeBinding :: TypeName ->
                   (ProgramType -> ProgramType) ->
-                  (TypeEnv, ProgramType) ->
-                  (TypeEnv, ProgramType)
+                  TypeInfo ->
+                  TypeInfo
 addTypeBinding name aggregateConstructor (env, typ) =
     let
       (symbol, tbl) = Sym.put name (sym env)
@@ -295,7 +226,7 @@ declareVariable :: TypeEnv
                    -> Atom
                    -> Maybe TypeName
                    -> Expression
-                   -> Either TypeError (TypeEnv, ProgramType)
+                   -> Either TypeError TypeInfo
 declareVariable e pos name Nothing exp =
     addVarBinding name <$> typeCheck e exp
 declareVariable e pos name (Just typName) exp =
@@ -303,7 +234,7 @@ declareVariable e pos name (Just typName) exp =
       (lookupType e typName pos >>= verifyType' exp)
     where verifyType' exp (e', typ) = verifyType e' typ exp
 
-addVarBinding :: Atom -> (TypeEnv, ProgramType) -> (TypeEnv, ProgramType)
+addVarBinding :: Atom -> TypeInfo -> TypeInfo
 addVarBinding name (env, typ) =
     let
       (symbol, tbl) = Sym.put name (sym env)
@@ -314,7 +245,7 @@ addVarBinding name (env, typ) =
       , Unit
       )
 
-addVarBinding' :: Atom -> (TypeEnv, ProgramType) -> Either TypeError (TypeEnv, ProgramType)
+addVarBinding' :: Atom -> TypeInfo -> Either TypeError TypeInfo
 addVarBinding' a et = Right $ addVarBinding a et
 
 addVarScope :: TypeEnv -> [(Atom, ProgramType)] -> TypeEnv
@@ -337,7 +268,7 @@ declareFn :: TypeEnv
              -> [(Atom, TypeName)]
              -> Maybe TypeName
              -> Expression
-             -> Either TypeError (TypeEnv, ProgramType)
+             -> Either TypeError TypeInfo
 declareFn e pos name fields retTyp body =
     do
       args <- argTypes pos e fields
@@ -360,7 +291,7 @@ checkVariableAssignment :: TypeEnv ->
                            SourcePos ->
                            Atom ->
                            Expression ->
-                           Either TypeError (TypeEnv, ProgramType)
+                           Either TypeError TypeInfo
 checkVariableAssignment e pos var exp =
       lookupValue e var pos >>= checkAssignment exp
 
@@ -369,7 +300,7 @@ checkArrayAssignment :: TypeEnv ->
                         LValue ->
                         Expression ->
                         Expression ->
-                        Either TypeError (TypeEnv, ProgramType)
+                        Either TypeError TypeInfo
 checkArrayAssignment e pos arr sub exp =
       checkArraySubscript e pos arr sub >>= checkAssignment exp
 
@@ -378,13 +309,13 @@ checkRecordAssignment :: TypeEnv ->
                          LValue ->
                          Atom ->
                          Expression ->
-                         Either TypeError (TypeEnv, ProgramType)
+                         Either TypeError TypeInfo
 checkRecordAssignment e pos rec field exp =
       checkRecordAccess e pos rec field >>= checkAssignment exp
 
 checkAssignment :: Expression ->
-                   (TypeEnv, ProgramType) ->
-                   Either TypeError (TypeEnv, ProgramType)
+                   TypeInfo ->
+                   Either TypeError TypeInfo
 checkAssignment exp (e', expected) =
     mapType (const Unit) $ verifyType e' expected exp
 
@@ -392,7 +323,7 @@ checkFunctionCall :: TypeEnv ->
                      SourcePos ->
                      Atom ->
                      [Expression] ->
-                     Either TypeError (TypeEnv, ProgramType)
+                     Either TypeError TypeInfo
 checkFunctionCall e pos fn args =
     lookupValue e fn pos >>=
     verifyIsFunction >>=
@@ -421,7 +352,7 @@ checkIfThenElse :: TypeEnv ->
                    Expression ->
                    Expression ->
                    Expression ->
-                   Either TypeError (TypeEnv, ProgramType)
+                   Either TypeError TypeInfo
 checkIfThenElse e pos bool truthy falsey =
     verifyType e TigerInt bool >>
     typeCheck e truthy >>=
@@ -431,7 +362,7 @@ checkIfThen :: TypeEnv ->
                SourcePos ->
                Expression ->
                Expression ->
-               Either TypeError (TypeEnv, ProgramType)
+               Either TypeError TypeInfo
 checkIfThen e pos bool truthy =
     verifyType e TigerInt bool >>
     verifyType e Unit truthy
@@ -442,7 +373,7 @@ checkFor :: TypeEnv ->
             Expression ->
             Expression ->
             Expression ->
-            Either TypeError (TypeEnv, ProgramType)
+            Either TypeError TypeInfo
 checkFor e pos idx fm to body =
     verifyType e TigerInt fm >>
     verifyType e TigerInt to >>
@@ -452,7 +383,7 @@ checkWhile :: TypeEnv ->
               SourcePos ->
               Expression ->
               Expression ->
-              Either TypeError (TypeEnv, ProgramType)
+              Either TypeError TypeInfo
 checkWhile e pos bool body =
     verifyType e TigerInt bool >>
     const (e, Unit) <$> verifyType e Unit body
@@ -461,7 +392,7 @@ checkLet :: TypeEnv ->
             SourcePos ->
             [Declaration] ->
             [Expression] ->
-            Either TypeError (TypeEnv, ProgramType)
+            Either TypeError TypeInfo
 checkLet e pos decs exps =
     (\(e', typ) -> (unscope e', typ)) <$>
     (uniqTypeDecs decs pos >>
@@ -535,7 +466,7 @@ initializeLetScope ((FnDec name args typ _):ds) e =
 verifyType :: TypeEnv
               -> ProgramType
               -> Expression
-              -> Either TypeError (TypeEnv, ProgramType)
+              -> Either TypeError TypeInfo
 verifyType env typ (Nil _) = if isNullable typ
                              then Right (env, typ)
                              else Left $ show typ ++ " cannot be inhabited by nil"
@@ -550,7 +481,7 @@ verifyType env typ exp =
 lookupType :: TypeEnv ->
               TypeName ->
               SourcePos ->
-              Either TypeError (TypeEnv, ProgramType)
+              Either TypeError TypeInfo
 lookupType env name pos =
     (maybeToEither ((,) env <$> (lookupTypeVal env name tEnv))
                               (undeclaredError Type pos name))
@@ -558,7 +489,7 @@ lookupType env name pos =
 lookupValue :: TypeEnv ->
                Atom ->
                SourcePos ->
-               Either TypeError (TypeEnv, ProgramType)
+               Either TypeError TypeInfo
 lookupValue env name pos =
     (maybeToEither ((,) env <$> (lookupTypeVal env name vEnv))
                               (undeclaredError Identifier pos name))
@@ -584,7 +515,7 @@ lookupTypeVal :: Show a => TypeEnv -> String -> (TypeEnv -> Env.Environment a) -
 lookupTypeVal env name getEnv = Sym.get name (sym env) >>= lookup (getEnv env)
   where lookup = flip Env.lookup
 
-typeError :: SourcePos -> [ProgramType] -> Either TypeError (TypeEnv, ProgramType) -> TypeError
+typeError :: SourcePos -> [ProgramType] -> Either TypeError TypeInfo -> TypeError
 typeError pos expected (Right (_, actual)) =
     "Type Error! Expected " ++
     (mconcat $ intersperse " or " (show <$> expected)) ++

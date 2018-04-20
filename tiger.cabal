@@ -22,6 +22,7 @@ library
                      , BinopPrecedence
                      , Symbol
                      , Environment
+                     , Types
                      , Typing
                      , Builtins
   build-depends:       base >= 4.7 && < 5
