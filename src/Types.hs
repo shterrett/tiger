@@ -169,3 +169,9 @@ typeInfo (For _ ti _ _ _ _) = ti
 typeInfo (Break _ ti) = ti
 typeInfo (Let _ ti _ _) = ti
 typeInfo (Grouped _ ti _) = ti
+
+getType :: TExp -> ProgramType
+getType = snd . typeInfo
+
+getTEnv :: TExp -> TypeEnv
+getTEnv = fst . typeInfo

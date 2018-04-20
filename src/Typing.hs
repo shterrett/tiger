@@ -28,6 +28,9 @@ import Types ( TypeInfo
              , mapEnv
              , mapType
              , TExp
+             , getType
+             , getTEnv
+             , typeInfo
              , Declarable(..)
              , isNullable
              )
@@ -35,23 +38,25 @@ import qualified Types as T
 import qualified Symbol as Sym
 import qualified Environment as Env
 
-typeCheck :: TypeEnv -> Expression -> Either TypeError TypeInfo
+typeCheck :: TypeEnv -> Expression -> Either TypeError TExp
 typeCheck e (Nil pos) = Left $ "Cannot infer the type of nil at " ++ show pos
-typeCheck e (ValuelessExpression _ _) = Right (e, Unit)
-typeCheck e (NoValue _) = Right (e, Unit)
-typeCheck e (Break _) = Right (e, Unit)
-typeCheck e (IntLiteral _ _) = Right (e, TigerInt)
-typeCheck e (StringLiteral _ _) = Right (e, TigerStr)
-typeCheck e (Negation pos exp) = verifyType e TigerInt exp
+typeCheck e (ValuelessExpression pos exp) = T.ValuelessExpression pos (e, Unit) <$> typeCheck e exp
+typeCheck e (NoValue pos) = Right $ T.NoValue pos (e, Unit)
+typeCheck e (Break pos) = Right $ T.Break pos (e, Unit)
+typeCheck e (IntLiteral pos int) = Right $ T.IntLiteral pos (e, TigerInt) int
+typeCheck e (StringLiteral pos str) = Right $ T.StringLiteral pos (e, TigerStr) str
+typeCheck e (Negation pos exp) = verifyType e TigerInt exp >>= T.Negation pos
 typeCheck e (BinOp pos op exp1 exp2) = checkBinOp e pos op exp1 exp2
-typeCheck e (Grouped _ exp) = typeCheck e exp
-typeCheck e (Sequence pos exps) = foldM (\(e', _) exp -> typeCheck e' exp) (e, Unit) exps
+typeCheck e (Grouped pos exp) = typeCheck e exp >>= T.Grouped pos
+typeCheck e (Sequence pos exps) = foldM (\(e', _) exp -> typeCheck e' exp) (e, Unit) exps >>= T.Sequence pos
 typeCheck e (ArrayCreation pos name exp1 exp2) = checkArray e pos name exp1 exp2
 typeCheck e (RecordCreation pos name fields) = checkRecord e pos name fields
-typeCheck e (LValExp pos (Id name)) = lookupValue e name pos
-typeCheck e (LValExp pos (RecordAccess record field)) = checkRecordAccess e pos record field
+typeCheck e (LValExp pos (Id name)) = T.LValExp pos <$> lookupValue e name pos <*> (Right (T.Id name))
+typeCheck e (LValExp pos (RecordAccess record field)) = T.LValExp pos <$>
+                                                        checkRecordAccess e pos record field <*>
+                                                        Right (T.RecordAccess record field)
 typeCheck e (LValExp pos (ArraySubscript arr sub)) = checkArraySubscript e pos arr sub
-typeCheck e (DecExp pos (TypeDec name typ)) = declareType e pos name typ
+typeCheck e (DecExp pos (TypeDec name typ)) = declareType e pos name typ >> Right (NoValue pos (e, Unit))
 typeCheck e (DecExp pos (VarDec name typ exp)) = declareVariable e pos name typ exp
 typeCheck e (DecExp pos (FnDec name fields retTyp body)) = declareFn e pos name fields retTyp body
 typeCheck e (Assignment pos (Id var) exp) = checkVariableAssignment e pos var exp
@@ -64,12 +69,15 @@ typeCheck e (For pos idx fm to body) = checkFor e pos idx fm to body
 typeCheck e (While pos bool body) = checkWhile e pos bool body
 typeCheck e (Let pos decs exps) = checkLet e pos decs exps
 
+checkLVal :: TypeEnv -> LValue -> Either TypeError T.LValue
+checkLVal = undefined
+
 checkBinOp :: TypeEnv ->
               SourcePos ->
               Operator ->
               Expression ->
               Expression ->
-              Either TypeError TypeInfo
+              Either TypeError TExp
 checkBinOp e pos op exp1 exp2
     | op `elem` [Addition, Subtraction, Multiplication, Division, And, Or] =
       foldM (\(e', typ) exp -> verifyType e' TigerInt exp) (e, TigerInt) [exp1, exp2]
@@ -91,7 +99,7 @@ checkArray :: TypeEnv ->
               TypeName ->
               Expression ->
               Expression ->
-              Either TypeError TypeInfo
+              Either TypeError TExp
 checkArray env pos name lengthExp initExp =
     (lookupType env name pos) >>= checkArrayType >>= checkLengthExp >>= checkScalarExp
     where checkArrayType typ@(_, Name _ (Just (Array _))) = Right typ
@@ -109,7 +117,7 @@ checkRecord :: TypeEnv
                -> SourcePos
                -> TypeName
                -> [(Atom, Expression)]
-               -> Either TypeError TypeInfo
+               -> Either TypeError TExp
 checkRecord env pos name fields =
     (lookupType env name pos) >>= checkRecordType >>= verifyTypesPresent >>= checkFieldsTypes
     where checkRecordType typ@(_, Name _ (Just (Record _))) = Right typ
@@ -162,23 +170,27 @@ checkArraySubscript :: TypeEnv
                        -> SourcePos
                        -> LValue
                        -> Expression
-                       -> Either TypeError TypeInfo
-checkArraySubscript env pos arr@(ArraySubscript arr' exp') exp =
-    verifyType env TigerInt exp' >>=
-      (\(env', _) -> verifyType env' TigerInt exp) >>=
-      (\(env'', _) -> arrayElementType env'' pos arr)
-checkArraySubscript env pos (RecordAccess record field) exp =
-  verifyType env TigerInt exp >>
-    checkRecordAccess env pos record field >>=
-    scalarType pos
-checkArraySubscript env pos lval@(Id _) exp =
-    verifyType env TigerInt exp >> arrayElementType env pos lval
+                       -> Either TypeError (TypeInfo, T.LValue)
+checkArraySubscript env pos arr@(ArraySubscript arr' subscript) exp = do
+    tsubscript <- verifyType env TigerInt subscript
+    ti@(env', _) <- arrayElementType (getTEnv tsubscript) pos arr
+    texp <- verifyType env' TigerInt exp
+    tarr <- checkLVal env arr'
+    return $ (ti, T.ArraySubscript tarr texp)
+checkArraySubscript env pos rec@(RecordAccess record field) exp =
+    (flip (,)) <$> checkLVal env rec <*>
+      (verifyType env TigerInt exp >>
+         checkRecordAccess env pos record field >>=
+         scalarType pos)
+checkArraySubscript env pos lval@(Id name) exp =
+    verifyType env TigerInt exp >>
+      (flip (,) $ T.Id name) <$> arrayElementType env pos lval
 
 arrayElementType :: TypeEnv ->
                     SourcePos ->
                     LValue ->
                     Either TypeError TypeInfo
-arrayElementType env pos lval = typeCheck env (LValExp pos lval) >>= scalarType pos
+arrayElementType env pos lval = typeCheck env (LValExp pos lval) >>= scalarType pos . typeInfo
 
 scalarType :: SourcePos -> TypeInfo -> Either TypeError TypeInfo
 scalarType _ (env, Array typ) = Right (env, typ)
@@ -226,27 +238,26 @@ declareVariable :: TypeEnv
                    -> Atom
                    -> Maybe TypeName
                    -> Expression
-                   -> Either TypeError TypeInfo
-declareVariable e pos name Nothing exp =
-    addVarBinding name <$> typeCheck e exp
-declareVariable e pos name (Just typName) exp =
-    addVarBinding name <$>
-      (lookupType e typName pos >>= verifyType' exp)
-    where verifyType' exp (e', typ) = verifyType e' typ exp
+                   -> Either TypeError (TypeEnv, T.Declaration)
+declareVariable e pos name Nothing exp = do
+    texp <- typeCheck e exp
+    let e' = addVarBinding name (typeInfo texp)
+    return (e', T.VarDec name texp)
+declareVariable e pos name (Just typName) exp = do
+    ti <- lookupType e typName pos
+    texp <- verifyType' exp ti
+    let e' = addVarBinding name (typeInfo texp)
+    return (e', T.VarDec name texp)
+  where verifyType' exp (e', typ) = verifyType e' typ exp
 
-addVarBinding :: Atom -> TypeInfo -> TypeInfo
+addVarBinding :: Atom -> TypeInfo -> TypeEnv
 addVarBinding name (env, typ) =
     let
       (symbol, tbl) = Sym.put name (sym env)
     in
-      ( env { vEnv = Env.addBinding (symbol, typ) (vEnv env)
-            , sym = tbl
-            }
-      , Unit
-      )
-
-addVarBinding' :: Atom -> TypeInfo -> Either TypeError TypeInfo
-addVarBinding' a et = Right $ addVarBinding a et
+      env { vEnv = Env.addBinding (symbol, typ) (vEnv env)
+          , sym = tbl
+          }
 
 addVarScope :: TypeEnv -> [(Atom, ProgramType)] -> TypeEnv
 addVarScope env typs =
@@ -268,16 +279,15 @@ declareFn :: TypeEnv
              -> [(Atom, TypeName)]
              -> Maybe TypeName
              -> Expression
-             -> Either TypeError TypeInfo
+             -> Either TypeError (TypeEnv, T.Declaration)
 declareFn e pos name fields retTyp body =
     do
       args <- argTypes pos e fields
       (_, returnType) <- lookupReturnType e pos retTyp
       let fnTyp = Function (fmap snd args) returnType
-      let e' = (flip addVarScope $ args) . fst $ addVarBinding name (e, fnTyp)
-      mapType (const Unit) (
-        mapEnv popVarScope (
-          verifyType e' returnType body))
+      let e' = (flip addVarScope $ args) $ addVarBinding name (e, fnTyp)
+      tbody <- verifyType e' returnType body
+      return $ (e', T.FnDec name (fmap fst fields) tbody)
     where lookupReturnType e pos (Just retTyp) = lookupType e retTyp pos
           lookupReturnType e _ Nothing = Right (e, Unit)
 
@@ -291,78 +301,83 @@ checkVariableAssignment :: TypeEnv ->
                            SourcePos ->
                            Atom ->
                            Expression ->
-                           Either TypeError TypeInfo
-checkVariableAssignment e pos var exp =
-      lookupValue e var pos >>= checkAssignment exp
+                           Either TypeError TExp
+checkVariableAssignment e pos var exp = do
+      ti <- lookupValue e var pos
+      texp <- verifyType e (snd ti) exp
+      return $ T.Assignment pos ti (T.Id var) texp
 
 checkArrayAssignment :: TypeEnv ->
                         SourcePos ->
                         LValue ->
                         Expression ->
                         Expression ->
-                        Either TypeError TypeInfo
-checkArrayAssignment e pos arr sub exp =
-      checkArraySubscript e pos arr sub >>= checkAssignment exp
+                        Either TypeError TExp
+checkArrayAssignment e pos arr sub exp = do
+      (ti, (T.ArraySubscript lval tsub)) <- checkArraySubscript e pos arr sub
+      tval <- checkAssignment exp ti
+      return $ T.Assignment pos (fst ti, Unit) lval tval
 
 checkRecordAssignment :: TypeEnv ->
                          SourcePos ->
                          LValue ->
                          Atom ->
                          Expression ->
-                         Either TypeError TypeInfo
+                         Either TypeError TExp
 checkRecordAssignment e pos rec field exp =
       checkRecordAccess e pos rec field >>= checkAssignment exp
 
 checkAssignment :: Expression ->
                    TypeInfo ->
-                   Either TypeError TypeInfo
-checkAssignment exp (e', expected) =
-    mapType (const Unit) $ verifyType e' expected exp
+                   Either TypeError TExp
+checkAssignment exp (e', expected) = verifyType e' expected exp
 
 checkFunctionCall :: TypeEnv ->
                      SourcePos ->
                      Atom ->
                      [Expression] ->
-                     Either TypeError TypeInfo
-checkFunctionCall e pos fn args =
-    lookupValue e fn pos >>=
-    verifyIsFunction >>=
-    verifyNumArgs >>=
-    verifyArgTypes >>=
-    returnType
-    where verifyIsFunction res@(_, Function _ _) = Right res
-          verifyIsFunction mismatch = Left $ typeError pos [Function [] Unit] (Right mismatch)
-          verifyNumArgs res@(_, Function params _)
-            | length params == length args = Right res
-            | otherwise = Left $ "Incorrect number of arguments: expected " ++
-                          show (length params) ++
-                          " given " ++
-                          show (length args) ++
-                          " at " ++
-                          show pos
-          verifyArgTypes res@(_, Function params _) =
-            const res <$>
-              foldM (\(e', _) (paramType, argExp) -> verifyType e' paramType argExp)
-                    (e, Unit)
-                    (zip params args)
-          returnType (e, Function _ typ) = Right (e, typ)
+                     Either TypeError TExp
+checkFunctionCall = undefined
+-- checkFunctionCall e pos fn args =
+--     lookupValue e fn pos >>=
+--     verifyIsFunction >>=
+--     verifyNumArgs >>=
+--     verifyArgTypes >>=
+--     returnType
+--     where verifyIsFunction res@(_, Function _ _) = Right res
+--           verifyIsFunction mismatch = Left $ typeError pos [Function [] Unit] (Right mismatch)
+--           verifyNumArgs res@(_, Function params _)
+--             | length params == length args = Right res
+--             | otherwise = Left $ "Incorrect number of arguments: expected " ++
+--                           show (length params) ++
+--                           " given " ++
+--                           show (length args) ++
+--                           " at " ++
+--                           show pos
+--           verifyArgTypes res@(_, Function params _) =
+--             const res <$>
+--               foldM (\(e', _) (paramType, argExp) -> verifyType e' paramType argExp)
+--                     (e, Unit)
+--                     (zip params args)
+--           returnType (e, Function _ typ) = Right (e, typ)
 
 checkIfThenElse :: TypeEnv ->
                    SourcePos ->
                    Expression ->
                    Expression ->
                    Expression ->
-                   Either TypeError TypeInfo
-checkIfThenElse e pos bool truthy falsey =
-    verifyType e TigerInt bool >>
-    typeCheck e truthy >>=
-    (\(_, typ) -> verifyType e typ falsey)
+                   Either TypeError TExp
+checkIfThenElse e pos bool truthy falsey = do
+      bool' <- verifyType e TigerInt bool
+      truthy' <- typeCheck e truthy
+      falsey' <- verifyType e (getType truthy') falsey
+      return $ T.IfThenElse pos (typeInfo truthy') bool' truthy' falsey'
 
 checkIfThen :: TypeEnv ->
                SourcePos ->
                Expression ->
                Expression ->
-               Either TypeError TypeInfo
+               Either TypeError TExp
 checkIfThen e pos bool truthy =
     verifyType e TigerInt bool >>
     verifyType e Unit truthy
@@ -373,39 +388,54 @@ checkFor :: TypeEnv ->
             Expression ->
             Expression ->
             Expression ->
-            Either TypeError TypeInfo
+            Either TypeError TExp
 checkFor e pos idx fm to body =
-    verifyType e TigerInt fm >>
-    verifyType e TigerInt to >>
-    const (e, Unit) <$> verifyType (addVarScope e [(idx, TigerInt)]) Unit body
+    T.For pos (e, Unit) idx <$>
+    verifyType e TigerInt fm <*>
+    verifyType e TigerInt to <*>
+    verifyType (addVarScope e [(idx, TigerInt)]) Unit body
 
 checkWhile :: TypeEnv ->
               SourcePos ->
               Expression ->
               Expression ->
-              Either TypeError TypeInfo
+              Either TypeError TExp
 checkWhile e pos bool body =
-    verifyType e TigerInt bool >>
-    const (e, Unit) <$> verifyType e Unit body
+    T.While pos (e, Unit) <$>
+      verifyType e TigerInt bool <*>
+      verifyType e Unit body
 
 checkLet :: TypeEnv ->
             SourcePos ->
             [Declaration] ->
             [Expression] ->
-            Either TypeError TypeInfo
-checkLet e pos decs exps =
-    (\(e', typ) -> (unscope e', typ)) <$>
-    (uniqTypeDecs decs pos >>
-     uniqFnDecs decs pos >>
-      (foldM (\(e', _) dec -> typeCheck e' (DecExp pos dec)) (initializeLetScope decs $ scope e, Unit) decs >>=
-      (\(e', _) -> typeCheck e' (Sequence pos exps))))
-    where scope env = env { tEnv = Env.pushScope [] (tEnv env)
-                          , vEnv = Env.pushScope [] (vEnv env)
-                          }
-          unscope env = env { tEnv = Env.popScope (tEnv env)
-                            , vEnv = Env.popScope (vEnv env)
-                            }
-
+            Either TypeError TExp
+checkLet = undefined
+-- checkLet e pos decs exps =
+--     (\(e', typ) -> (unscope e', typ)) <$>
+--     (uniqTypeDecs decs pos >>
+--      uniqFnDecs decs pos >>
+--       (foldM (\(e', _) dec -> typeCheck e' (DecExp pos dec)) (initializeLetScope decs $ scope e, Unit) decs >>=
+--       (\(e', _) -> typeCheck e' (Sequence pos exps))))
+--     where scope env = env { tEnv = Env.pushScope [] (tEnv env)
+--                           , vEnv = Env.pushScope [] (vEnv env)
+--                           }
+--           unscope env = env { tEnv = Env.popScope (tEnv env)
+--                             , vEnv = Env.popScope (vEnv env)
+--                             }
+-- 
+-- checkListExps :: TypeEnv ->
+--                  [Expression] ->
+--                  Either [TExp]
+-- checkListExps _ [] = []
+-- checkListExps e (exp:exps) =
+--     let
+--       texp = typeCheck e exp
+--     in
+--       case texp of
+--         Right texp' -> Right $ texp':(checkListExps (getTEnv <$> texp') exps)
+--         err@(Left _) -> err
+-- 
 uniqTypeDecs :: [Declaration] -> SourcePos -> Either TypeError ()
 uniqTypeDecs ds pos = uniqDecs Type isTypeDec typeId pos ds
       where isTypeDec (TypeDec _ _) = True
@@ -466,17 +496,20 @@ initializeLetScope ((FnDec name args typ _):ds) e =
 verifyType :: TypeEnv
               -> ProgramType
               -> Expression
-              -> Either TypeError TypeInfo
-verifyType env typ (Nil _) = if isNullable typ
-                             then Right (env, typ)
+              -> Either TypeError TExp
+verifyType env typ (Nil pos) = if isNullable typ
+                             then Right $ T.Nil pos (env, typ)
                              else Left $ show typ ++ " cannot be inhabited by nil"
 verifyType env typ exp =
-    case typeCheck env exp of
-      res@(Right (env', act)) ->
-        if act == typ
-        then Right (env', act)
-        else Left $ typeError (position exp) [typ] res
-      mismatch -> Left $ typeError (position exp) [typ] mismatch
+    let
+      texp = typeCheck env exp
+    in
+      case typeInfo <$> texp of
+        res@(Right (env', act)) ->
+          if act == typ
+          then texp
+          else Left $ typeError (position exp) [typ] res
+        mismatch -> Left $ typeError (position exp) [typ] mismatch
 
 lookupType :: TypeEnv ->
               TypeName ->
