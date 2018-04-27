@@ -114,17 +114,6 @@ instance Show Declarable where
     show Type = "type"
     show Fn = "function"
 
-mapEnv :: (TypeEnv -> TypeEnv) ->
-          Either TypeError TypeInfo ->
-          Either TypeError TypeInfo
-mapEnv _ res@(Left _) = res
-mapEnv f (Right (e, t)) = Right (f e, t)
-
-mapType :: (ProgramType -> ProgramType) ->
-           Either TypeError TypeInfo ->
-           Either TypeError TypeInfo
-mapType = fmap . fmap
-
 position :: TExp -> SourcePos
 position (LValExp pos _ _) = pos
 position (DecExp pos _ _) = pos

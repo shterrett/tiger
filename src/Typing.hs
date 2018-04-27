@@ -25,8 +25,6 @@ import Types ( TypeInfo
              , ProgramType(..)
              , TypeEnv(..)
              , TypeError
-             , mapEnv
-             , mapType
              , TExp
              , getType
              , getTEnv
@@ -157,9 +155,12 @@ checkRecord env pos name fields =
             in T.RecordCreation pos typ name <$>
                (sequence $ fmap (\((n, exp), typ) -> ((,) n) <$> verifyType env typ exp)
                                (zip exps types))
-          checkFieldsTypes (env', alias@(Name _ (Just typ@(Name _ _)))) =
-            checkFieldsTypes (env', typ)
-            -- TODO change mapType to work on TExp mapType (const alias) $ checkFieldsTypes (env', typ)
+          checkFieldsTypes alias@(env', (Name _ (Just typ@(Name _ _)))) =
+            mapRecordType alias $ checkFieldsTypes (env', typ)
+          mapType = fmap . fmap
+          mapRecordType typ (Right (T.RecordCreation pos _ name fields)) = Right $
+            T.RecordCreation pos typ name fields
+          mapRecordType _ err = err
 
 
 checkRecordAccess :: TypeEnv
