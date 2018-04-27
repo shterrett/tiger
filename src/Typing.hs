@@ -358,29 +358,26 @@ checkFunctionCall :: TypeEnv ->
                      Atom ->
                      [Expression] ->
                      Either TypeError TExp
-checkFunctionCall = undefined
--- checkFunctionCall e pos fn args =
---     lookupValue e fn pos >>=
---     verifyIsFunction >>=
---     verifyNumArgs >>=
---     verifyArgTypes >>=
---     returnType
---     where verifyIsFunction res@(_, Function _ _) = Right res
---           verifyIsFunction mismatch = Left $ typeError pos [Function [] Unit] (Right mismatch)
---           verifyNumArgs res@(_, Function params _)
---             | length params == length args = Right res
---             | otherwise = Left $ "Incorrect number of arguments: expected " ++
---                           show (length params) ++
---                           " given " ++
---                           show (length args) ++
---                           " at " ++
---                           show pos
---           verifyArgTypes res@(_, Function params _) =
---             const res <$>
---               foldM (\(e', _) (paramType, argExp) -> verifyType e' paramType argExp)
---                     (e, Unit)
---                     (zip params args)
---           returnType (e, Function _ typ) = Right (e, typ)
+checkFunctionCall e pos fn args = do
+    retType <- lookupValue e fn pos >>=
+               verifyIsFunction >>=
+               returnType
+    tExps <- verifyNumArgs retType >>=
+             verifyArgTypes
+    return $ T.FunctionCall pos retType fn tExps
+  where verifyIsFunction res@(_, Function _ _) = Right res
+        verifyIsFunction mismatch = Left $ typeError pos [Function [] Unit] (Right mismatch)
+        verifyNumArgs res@(_, Function params _)
+          | length params == length args = Right res
+          | otherwise = Left $ "Incorrect number of arguments: expected " ++
+                        show (length params) ++
+                        " given " ++
+                        show (length args) ++
+                        " at " ++
+                        show pos
+        verifyArgTypes res@(_, Function params _) =
+          sequence $ fmap (uncurry $ verifyType e) (zip params args)
+        returnType (e, Function _ typ) = return (e, typ)
 
 checkIfThenElse :: TypeEnv ->
                    SourcePos ->
