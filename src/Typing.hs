@@ -45,20 +45,22 @@ typeCheck e (NoValue pos) = Right $ T.NoValue pos (e, Unit)
 typeCheck e (Break pos) = Right $ T.Break pos (e, Unit)
 typeCheck e (IntLiteral pos int) = Right $ T.IntLiteral pos (e, TigerInt) int
 typeCheck e (StringLiteral pos str) = Right $ T.StringLiteral pos (e, TigerStr) str
-typeCheck e (Negation pos exp) = verifyType e TigerInt exp >>= T.Negation pos
+typeCheck e (Negation pos exp) = (T.Negation pos (e, TigerInt) <$> verifyType e TigerInt exp)
 typeCheck e (BinOp pos op exp1 exp2) = checkBinOp e pos op exp1 exp2
-typeCheck e (Grouped pos exp) = typeCheck e exp >>= T.Grouped pos
-typeCheck e (Sequence pos exps) = foldM (\(e', _) exp -> typeCheck e' exp) (e, Unit) exps >>= T.Sequence pos
+typeCheck e (Grouped pos exp) =
+    (\texp -> T.Grouped pos (typeInfo texp) texp) <$>
+      typeCheck e exp
+typeCheck e (Sequence pos exps) =
+    (sequence $ fmap (typeCheck e) exps) >>=
+      (\texps -> return $ T.Sequence pos (typeInfo . last $ texps) texps)
 typeCheck e (ArrayCreation pos name exp1 exp2) = checkArray e pos name exp1 exp2
 typeCheck e (RecordCreation pos name fields) = checkRecord e pos name fields
-typeCheck e (LValExp pos (Id name)) = T.LValExp pos <$> lookupValue e name pos <*> (Right (T.Id name))
-typeCheck e (LValExp pos (RecordAccess record field)) = T.LValExp pos <$>
-                                                        checkRecordAccess e pos record field <*>
-                                                        Right (T.RecordAccess record field)
-typeCheck e (LValExp pos (ArraySubscript arr sub)) = checkArraySubscript e pos arr sub
-typeCheck e (DecExp pos (TypeDec name typ)) = declareType e pos name typ >> Right (NoValue pos (e, Unit))
-typeCheck e (DecExp pos (VarDec name typ exp)) = declareVariable e pos name typ exp
-typeCheck e (DecExp pos (FnDec name fields retTyp body)) = declareFn e pos name fields retTyp body
+typeCheck e (LValExp pos lval@(Id name)) =
+    T.LValExp pos <$> lookupValue e name pos <*> (checkLVal e lval)
+typeCheck e (LValExp pos (RecordAccess record field)) =
+    (uncurry $ T.LValExp pos) <$> checkRecordAccess e pos record field
+typeCheck e (LValExp pos (ArraySubscript arr sub)) =
+    (uncurry $ T.LValExp pos) <$> checkArraySubscript e pos arr sub
 typeCheck e (Assignment pos (Id var) exp) = checkVariableAssignment e pos var exp
 typeCheck e (Assignment pos (ArraySubscript arr sub) exp) = checkArrayAssignment e pos arr sub exp
 typeCheck e (Assignment pos (RecordAccess rec field) exp) = checkRecordAssignment e pos rec field exp
@@ -70,7 +72,11 @@ typeCheck e (While pos bool body) = checkWhile e pos bool body
 typeCheck e (Let pos decs exps) = checkLet e pos decs exps
 
 checkLVal :: TypeEnv -> LValue -> Either TypeError T.LValue
-checkLVal = undefined
+checkLVal _ (Id name) = Right $ T.Id name
+checkLVal e (RecordAccess lval fields) =
+    (\lval' -> T.RecordAccess lval' fields) <$>
+      checkLVal e lval
+checkLVal e (ArraySubscript lval exp) = T.ArraySubscript <$> (checkLVal e lval) <*> typeCheck e exp
 
 checkBinOp :: TypeEnv ->
               SourcePos ->
@@ -160,13 +166,16 @@ checkRecordAccess :: TypeEnv
                      -> SourcePos
                      -> LValue
                      -> Atom
-                     -> Either TypeError TypeInfo
-checkRecordAccess env pos (Id record) field =
-    lookupValue env record pos >>= recordFields pos >>= recordFieldType pos field
-checkRecordAccess env pos (RecordAccess record' field') field =
-    checkRecordAccess env pos record' field' >>= recordFields pos >>= recordFieldType pos field
-checkRecordAccess env pos (ArraySubscript array exp) field =
-   arrayElementType env pos array >>= recordFields pos >>= recordFieldType pos field
+                     -> Either TypeError (TypeInfo, T.LValue)
+checkRecordAccess env pos lval@(Id record) field =
+    flipTuple <$> (T.RecordAccess <$> (checkLVal env lval) <*> (pure field)) <*>
+      (lookupValue env record pos >>= recordFields pos >>= recordFieldType pos field)
+checkRecordAccess env pos lval@(RecordAccess record' field') field =
+    flipTuple <$> (T.RecordAccess <$> (checkLVal env lval) <*> (pure field)) <*>
+      (fst <$> checkRecordAccess env pos record' field' >>= recordFields pos >>= recordFieldType pos field)
+checkRecordAccess env pos lval@(ArraySubscript array exp) field =
+    flipTuple <$> (T.RecordAccess <$> (checkLVal env lval) <*> (pure field)) <*>
+      (arrayElementType env pos array >>= recordFields pos >>= recordFieldType pos field)
 
 recordFields :: SourcePos -> TypeInfo -> Either TypeError (TypeEnv, [(Atom, ProgramType)])
 recordFields pos (env, (Record fields)) = Right (env, fields)
@@ -190,13 +199,13 @@ checkArraySubscript env pos arr@(ArraySubscript arr' subscript) exp = do
     tarr <- checkLVal env arr'
     return $ (ti, T.ArraySubscript tarr texp)
 checkArraySubscript env pos rec@(RecordAccess record field) exp =
-    (flip (,)) <$> checkLVal env rec <*>
-      (verifyType env TigerInt exp >>
-         checkRecordAccess env pos record field >>=
-         scalarType pos)
+    flipTuple <$>
+      (T.ArraySubscript <$> checkLVal env rec <*> verifyType env TigerInt exp) <*>
+      (fst <$> checkRecordAccess env pos record field >>= scalarType pos)
 checkArraySubscript env pos lval@(Id name) exp =
-    verifyType env TigerInt exp >>
-      (flip (,) $ T.Id name) <$> arrayElementType env pos lval
+    flipTuple <$>
+      (T.ArraySubscript <$> checkLVal env lval <*> verifyType env TigerInt exp) <*>
+      arrayElementType env pos lval
 
 arrayElementType :: TypeEnv ->
                     SourcePos ->
@@ -337,7 +346,7 @@ checkRecordAssignment :: TypeEnv ->
                          Expression ->
                          Either TypeError TExp
 checkRecordAssignment e pos rec field exp =
-      checkRecordAccess e pos rec field >>= checkAssignment exp
+      fst <$> checkRecordAccess e pos rec field >>= checkAssignment exp
 
 checkAssignment :: Expression ->
                    TypeInfo ->
@@ -542,6 +551,9 @@ lookupValue env name pos =
 maybeToEither :: Maybe a -> b -> Either b a
 maybeToEither Nothing e = Left e
 maybeToEither (Just t) _ = Right t
+
+flipTuple :: a -> b -> (b, a)
+flipTuple = flip (,)
 
 undeclaredError :: Declarable -> SourcePos -> Atom -> TypeError
 undeclaredError dec pos name =
