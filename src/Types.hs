@@ -12,6 +12,7 @@ import AST ( Atom
 data Declaration =
     VarDec Atom TExp
     | FnDec Atom [Atom] TExp
+    | TypeDec
     deriving (Show, Eq)
 data LValue =
     Id Atom
