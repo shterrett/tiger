@@ -219,108 +219,6 @@ scalarType _ (env, Name _ (Just (Array typ))) = Right (env, typ)
 scalarType pos (env, Name _ (Just typ@(Name _ _))) = scalarType pos (env, typ)
 scalarType pos mismatch = Left $ typeError pos [Array Unit] (Right mismatch)
 
-declareType :: TypeEnv ->
-               SourcePos ->
-               TypeName ->
-               Type ->
-               Either TypeError (TypeInfo, T.Declaration)
-declareType env pos name (TypeId typeName) =
-    flipTuple T.TypeDec <$> (addTypeBinding name id <$> lookupType env typeName pos)
-declareType env pos name (ArrayOf typeName) =
-    flipTuple T.TypeDec <$> (addTypeBinding name Array <$> lookupType env typeName pos)
-declareType env pos name (RecordOf fields) =
-    flipTuple T.TypeDec <$>
-      ((addTypeBinding name id) <$>
-        ((,) env) <$>
-        Record <$>
-        recordTypeFields)
-    where recordTypeFields = sequence $
-                            (\(fieldName, typeName) ->
-                              ((,) fieldName) . snd <$>
-                               (lookupType env typeName pos)) <$>
-                            fields
-
-addTypeBinding :: TypeName ->
-                  (ProgramType -> ProgramType) ->
-                  TypeInfo ->
-                  TypeInfo
-addTypeBinding name aggregateConstructor (env, typ) =
-    let
-      (symbol, tbl) = Sym.put name (sym env)
-      newType = Name symbol $ Just (aggregateConstructor typ)
-    in
-     ( env { tEnv = Env.addBinding (symbol, newType) (tEnv env)
-           , sym = tbl
-           }
-     , Unit
-     )
-
-declareVariable :: TypeEnv
-                   -> SourcePos
-                   -> Atom
-                   -> Maybe TypeName
-                   -> Expression
-                   -> Either TypeError (TypeInfo, T.Declaration)
-declareVariable e pos name Nothing exp = do
-    texp <- typeCheck e exp
-    let ti = addVarBinding name (typeInfo texp)
-    return (ti, T.VarDec name texp)
-declareVariable e pos name (Just typName) exp = do
-    ti <- lookupType e typName pos
-    texp <- verifyType' exp ti
-    let ti = addVarBinding name (typeInfo texp)
-    return (ti, T.VarDec name texp)
-  where verifyType' exp (e', typ) = verifyType e' typ exp
-
-addVarBinding :: Atom -> TypeInfo -> TypeInfo
-addVarBinding name (env, typ) =
-    let
-      (symbol, tbl) = Sym.put name (sym env)
-    in
-      ( env { vEnv = Env.addBinding (symbol, typ) (vEnv env)
-            , sym = tbl
-            }
-      , typ
-      )
-
-addVarScope :: TypeEnv -> [(Atom, ProgramType)] -> TypeEnv
-addVarScope env typs =
-    let
-      initial = Sym.put "int" (sym env)
-      atomsAndTables = scanr (\(name, _) (_, tbl')-> Sym.put name tbl') initial typs
-      table' = snd $ head atomsAndTables
-      atomsAndTypes = zip (fst <$> atomsAndTables) (snd <$> typs)
-    in env { vEnv = Env.pushScope atomsAndTypes (vEnv env)
-           , sym = table'
-           }
-
-popVarScope :: TypeEnv -> TypeEnv
-popVarScope env = env { vEnv = Env.popScope (vEnv env) }
-
-declareFn :: TypeEnv
-             -> SourcePos
-             -> Atom
-             -> [(Atom, TypeName)]
-             -> Maybe TypeName
-             -> Expression
-             -> Either TypeError (TypeInfo, T.Declaration)
-declareFn e pos name fields retTyp body =
-    do
-      args <- argTypes pos e fields
-      (_, returnType) <- lookupReturnType e pos retTyp
-      let fnTyp = Function (fmap snd args) returnType
-      let ti = (flip addVarScope $ args) $ fst $ addVarBinding name (e, fnTyp)
-      tbody <- verifyType ti returnType body
-      return $ ((ti, fnTyp), T.FnDec name (fmap fst fields) tbody)
-    where lookupReturnType e pos (Just retTyp) = lookupType e retTyp pos
-          lookupReturnType e _ Nothing = Right (e, Unit)
-
-argTypes :: SourcePos -> TypeEnv -> [(Atom, TypeName)] -> Either TypeError [(Atom, ProgramType)]
-argTypes pos e fields =
-    (zip $ fmap fst fields) <$>
-    fmap snd <$>
-    mapM (\(_, typName) -> lookupType e typName pos) fields
-
 checkVariableAssignment :: TypeEnv ->
                            SourcePos ->
                            Atom ->
@@ -431,31 +329,25 @@ checkLet :: TypeEnv ->
             [Declaration] ->
             [Expression] ->
             Either TypeError TExp
-checkLet = undefined
--- checkLet e pos decs exps =
---     (\(e', typ) -> (unscope e', typ)) <$>
---     (uniqTypeDecs decs pos >>
---      uniqFnDecs decs pos >>
---       (foldM (\(e', _) dec -> typeCheck e' (DecExp pos dec)) (initializeLetScope decs $ scope e, Unit) decs >>=
---       (\(e', _) -> typeCheck e' (Sequence pos exps))))
---     where scope env = env { tEnv = Env.pushScope [] (tEnv env)
---                           , vEnv = Env.pushScope [] (vEnv env)
---                           }
---           unscope env = env { tEnv = Env.popScope (tEnv env)
---                             , vEnv = Env.popScope (vEnv env)
---                             }
--- 
--- checkListExps :: TypeEnv ->
---                  [Expression] ->
---                  Either [TExp]
--- checkListExps _ [] = []
--- checkListExps e (exp:exps) =
---     let
---       texp = typeCheck e exp
---     in
---       case texp of
---         Right texp' -> Right $ texp':(checkListExps (getTEnv <$> texp') exps)
---         err@(Left _) -> err
+checkLet e pos decs exps = do
+  (e', tdecs) <- uniqTypeDecs decs pos >>
+                  uniqFnDecs decs pos >>
+                  declareEnv (scope e) pos decs
+  texps <- checkListExps e' exps
+  let (_, retTyp) = typeInfo $ last texps
+  let e'' = unscope e'
+  return $ T.Let pos (e'', retTyp) tdecs texps
+    where scope env = env { tEnv = Env.pushScope [] (tEnv env)
+                          , vEnv = Env.pushScope [] (vEnv env)
+                          }
+          unscope env = env { tEnv = Env.popScope (tEnv env)
+                            , vEnv = Env.popScope (vEnv env)
+                            }
+
+checkListExps :: TypeEnv ->
+                 [Expression] ->
+                 Either TypeError [TExp]
+checkListExps e exps = sequence $ typeCheck e <$> exps
 
 uniqTypeDecs :: [Declaration] -> SourcePos -> Either TypeError ()
 uniqTypeDecs ds pos = uniqDecs Type isTypeDec typeId pos ds
@@ -483,6 +375,124 @@ uniqDecs decType filterFn nameFn pos ds =
       if duplicates == []
       then Right ()
       else Left $ multipleDeclaredError decType pos duplicates
+
+declareEnv :: TypeEnv -> SourcePos -> [Declaration] -> Either TypeError (TypeEnv, [T.Declaration])
+declareEnv e pos ds = declareEnv' pos ds (Right (e, []))
+
+declareEnv' :: SourcePos ->
+               [Declaration] ->
+               Either TypeError (TypeEnv, [T.Declaration]) ->
+               Either TypeError (TypeEnv, [T.Declaration])
+declareEnv' _ [] res = (fmap . fmap) reverse res
+declareEnv' _ _ err@(Left _) = err
+declareEnv' pos (d:ds) (Right (e, tds)) = declareEnv' pos ds ((fmap . fmap) (addTail tds) $ declare e pos d)
+  where addTail decs dec = dec:decs
+
+declare :: TypeEnv ->
+           SourcePos ->
+           Declaration ->
+           Either TypeError (TypeEnv, T.Declaration)
+declare e pos (TypeDec name typ) = declareType e pos name typ
+declare e pos (VarDec name typeName exp) = declareVariable e pos name typeName exp
+declare e pos (FnDec name params typeName body) = declareFn e pos name params typeName body
+
+declareType :: TypeEnv ->
+               SourcePos ->
+               TypeName ->
+               Type ->
+               Either TypeError (TypeEnv, T.Declaration)
+declareType env pos name (TypeId typeName) =
+    flipTuple T.TypeDec <$> (addTypeBinding name id <$> lookupType env typeName pos)
+declareType env pos name (ArrayOf typeName) =
+    flipTuple T.TypeDec <$> (addTypeBinding name Array <$> lookupType env typeName pos)
+declareType env pos name (RecordOf fields) =
+    flipTuple T.TypeDec <$>
+      ((addTypeBinding name id) <$>
+        ((,) env) <$>
+        Record <$>
+        recordTypeFields)
+    where recordTypeFields = sequence $
+                            (\(fieldName, typeName) ->
+                              ((,) fieldName) . snd <$>
+                               (lookupType env typeName pos)) <$>
+                            fields
+
+addTypeBinding :: TypeName ->
+                  (ProgramType -> ProgramType) ->
+                  TypeInfo ->
+                  TypeEnv
+addTypeBinding name aggregateConstructor (env, typ) =
+    let
+      (symbol, tbl) = Sym.put name (sym env)
+      newType = Name symbol $ Just (aggregateConstructor typ)
+    in
+     env { tEnv = Env.addBinding (symbol, newType) (tEnv env)
+         , sym = tbl
+         }
+
+declareVariable :: TypeEnv
+                   -> SourcePos
+                   -> Atom
+                   -> Maybe TypeName
+                   -> Expression
+                   -> Either TypeError (TypeEnv, T.Declaration)
+declareVariable e pos name Nothing exp = do
+    texp <- typeCheck e exp
+    let e' = addVarBinding name (typeInfo texp)
+    return (e', T.VarDec name texp)
+declareVariable e pos name (Just typName) exp = do
+    e' <- lookupType e typName pos
+    texp <- verifyType' exp e'
+    let e' = addVarBinding name (typeInfo texp)
+    return (e', T.VarDec name texp)
+  where verifyType' exp (e', typ) = verifyType e' typ exp
+
+addVarBinding :: Atom -> TypeInfo -> TypeEnv
+addVarBinding name (env, typ) =
+    let
+      (symbol, tbl) = Sym.put name (sym env)
+    in
+      env { vEnv = Env.addBinding (symbol, typ) (vEnv env)
+          , sym = tbl
+          }
+
+addVarScope :: TypeEnv -> [(Atom, ProgramType)] -> TypeEnv
+addVarScope env typs =
+    let
+      initial = Sym.put "int" (sym env)
+      atomsAndTables = scanr (\(name, _) (_, tbl')-> Sym.put name tbl') initial typs
+      table' = snd $ head atomsAndTables
+      atomsAndTypes = zip (fst <$> atomsAndTables) (snd <$> typs)
+    in env { vEnv = Env.pushScope atomsAndTypes (vEnv env)
+           , sym = table'
+           }
+
+popVarScope :: TypeEnv -> TypeEnv
+popVarScope env = env { vEnv = Env.popScope (vEnv env) }
+
+declareFn :: TypeEnv
+             -> SourcePos
+             -> Atom
+             -> [(Atom, TypeName)]
+             -> Maybe TypeName
+             -> Expression
+             -> Either TypeError (TypeEnv, T.Declaration)
+declareFn e pos name fields retTyp body =
+    do
+      args <- argTypes pos e fields
+      (_, returnType) <- lookupReturnType e pos retTyp
+      let fnTyp = Function (fmap snd args) returnType
+      let e' = (flip addVarScope $ args) $ addVarBinding name (e, fnTyp)
+      tbody <- verifyType e' returnType body
+      return $ (e', T.FnDec name (fmap fst fields) tbody)
+    where lookupReturnType e pos (Just retTyp) = lookupType e retTyp pos
+          lookupReturnType e _ Nothing = Right (e, Unit)
+
+argTypes :: SourcePos -> TypeEnv -> [(Atom, TypeName)] -> Either TypeError [(Atom, ProgramType)]
+argTypes pos e fields =
+    (zip $ fmap fst fields) <$>
+    fmap snd <$>
+    mapM (\(_, typName) -> lookupType e typName pos) fields
 
 initializeLetScope :: [Declaration] -> TypeEnv -> TypeEnv
 initializeLetScope [] e = e
