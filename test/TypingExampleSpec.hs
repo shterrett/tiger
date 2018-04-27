@@ -8,11 +8,10 @@ import qualified Symbol as Sym
 import Parse (parse)
 import Typing
 import Types ( TypeInfo
+             , typeInfo
              , ProgramType(..)
              , TypeEnv(..)
              , TypeError
-             , mapEnv
-             , mapType
              , TExp
              , Declarable(..)
              , isNullable
@@ -23,7 +22,7 @@ checkTest :: String -> IO (Either TypeError (TypeEnv, ProgramType))
 checkTest file = do
     let emptyEnv = initialTypeEnv
     program <- readFile $ "test/testcases/" ++ file
-    return ((parse program) >>= (typeCheck emptyEnv))
+    return ((parse program) >>= (\exp -> typeInfo <$> typeCheck emptyEnv exp))
 
 impossible = 1 `shouldBe` 2
 
