@@ -101,17 +101,20 @@ checkArray :: TypeEnv ->
               Expression ->
               Either TypeError TExp
 checkArray env pos name lengthExp initExp =
-    (lookupType env name pos) >>= checkArrayType >>= checkLengthExp >>= checkScalarExp
+    let
+      typ = (lookupType env name pos) >>= checkArrayType
+    in
+     (\t -> T.ArrayCreation pos t name) <$> typ <*> (typ >>= checkLengthExp) <*> (typ >>= checkScalarExp)
     where checkArrayType typ@(_, Name _ (Just (Array _))) = Right typ
           checkArrayType alias@(env', Name _ (Just typ@(Name _ _))) =
             const alias <$> checkArrayType (env', typ)
           checkArrayType mismatch = Left $ typeError pos [Array Unit] (Right mismatch)
           checkLengthExp (ev, arrType) =
-            mapType (const arrType) $ verifyType ev TigerInt lengthExp
+            verifyType ev TigerInt lengthExp
           checkScalarExp typ@(ev, arrType@((Name _ (Just (Array expected))))) =
-            mapType (const arrType) $ verifyType ev expected initExp
+            verifyType ev expected initExp
           checkScalarExp (ev, alias@((Name _ (Just arrTyp@(Name _ _))))) =
-            mapType (const alias) $ checkScalarExp (ev, arrTyp)
+            checkScalarExp (ev, arrTyp)
 
 checkRecord :: TypeEnv
                -> SourcePos
@@ -136,12 +139,14 @@ checkRecord env pos name fields =
           verifyTypesPresent (env', alias@(Name _ (Just typ@(Name _ _)))) =
             mapType (const alias) $ verifyTypesPresent (env', typ)
           checkFieldsTypes typ@(_, Name _ (Just (Record typeFields))) =
-            let exps = snd <$> (sortBy (comparing fst) fields)
+            let exps = sortBy (comparing fst) fields
                 types = snd <$> (sortBy (comparing fst ) typeFields)
-            in const typ <$>
-               foldM (\(e', _) (exp, typ) -> verifyType e' typ exp) typ (zip exps types)
+            in T.RecordCreation pos typ name <$>
+               (sequence $ fmap (\((n, exp), typ) -> ((,) n) <$> verifyType env typ exp)
+                               (zip exps types))
           checkFieldsTypes (env', alias@(Name _ (Just typ@(Name _ _)))) =
-            mapType (const alias) $ checkFieldsTypes (env', typ)
+            checkFieldsTypes (env', typ)
+            -- TODO change mapType to work on TExp mapType (const alias) $ checkFieldsTypes (env', typ)
 
 
 checkRecordAccess :: TypeEnv
