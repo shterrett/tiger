@@ -80,19 +80,26 @@ checkBinOp :: TypeEnv ->
               Either TypeError TExp
 checkBinOp e pos op exp1 exp2
     | op `elem` [Addition, Subtraction, Multiplication, Division, And, Or] =
-      foldM (\(e', typ) exp -> verifyType e' TigerInt exp) (e, TigerInt) [exp1, exp2]
+      T.BinOp pos (e, TigerInt) op <$> verifyType e TigerInt exp1 <*> verifyType e TigerInt exp2
     | op `elem` [LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual] =
-      case (typeCheck e exp1, typeCheck e exp2) of
-        ((Right (_, TigerInt)), (Right (_, TigerInt))) -> Right (e, TigerInt)
-        ((Right (_, TigerStr)), (Right (_, TigerStr))) -> Right (e, TigerInt)
-        ((Right (_, TigerInt)), mismatch) -> Left $ typeError pos [TigerInt] mismatch
-        ((Right (_, TigerStr)), mismatch) -> Left $ typeError pos [TigerStr] mismatch
-        (mismatch, _) -> Left $ typeError pos [TigerInt, TigerStr] mismatch
+      let
+        leftTyp = typeCheck e exp1
+      in
+        case (typeInfo <$> leftTyp) of
+          (Right typ@(_, TigerInt)) -> cmpTyp typ leftTyp exp2
+          (Right typ@(_, TigerStr)) -> cmpTyp typ leftTyp exp2
+          mismatch -> Left $ typeError pos [TigerInt, TigerStr] mismatch
     | op `elem` [Equality, NonEquality] =
-      case (typeCheck e exp1, typeCheck e exp2) of
-        ((Right (_, t1)), _) -> mapType (const TigerInt) $ verifyType e t1 exp2
-        (_, (Right (_, t2))) -> mapType (const TigerInt) $ verifyType e t2 exp1
-        (err@(Left _), _) -> err
+      let
+        leftTyp = typeCheck e exp1
+      in
+        case (typeInfo <$> leftTyp) of
+          (Right typ@(_, rt)) -> cmpTyp typ leftTyp exp2
+          mismatch -> Left $ typeError pos [Unit] mismatch
+    where
+      cmpTyp (e', _) leftTyp rightExp = T.BinOp pos (e', TigerInt) op <$>
+                      leftTyp <*>
+                       (snd . typeInfo <$> leftTyp >>= (flip (verifyType e) $ rightExp))
 
 checkArray :: TypeEnv ->
               SourcePos ->
