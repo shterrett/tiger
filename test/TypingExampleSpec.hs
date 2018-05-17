@@ -85,7 +85,7 @@ spec = do
       it "typechecks test 13" $ do
         res <- checkTest "test13.tig"
         let Left err = res
-        err `shouldBe` "Type Error! Expected Integer but got String at (line 3, column 2)"
+        err `shouldBe` "Type Error! Expected Integer but got String at (line 3, column 5)"
       it "typechecks test 14" $ do
         res <- checkTest "test14.tig"
         let Left err = res

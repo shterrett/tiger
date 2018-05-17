@@ -48,9 +48,7 @@ typeCheck e (BinOp pos op exp1 exp2) = checkBinOp e pos op exp1 exp2
 typeCheck e (Grouped pos exp) =
     (\texp -> T.Grouped pos (typeInfo texp) texp) <$>
       typeCheck e exp
-typeCheck e (Sequence pos exps) =
-    (sequence $ fmap (typeCheck e) exps) >>=
-      (\texps -> return $ T.Sequence pos (typeInfo . last $ texps) texps)
+typeCheck e (Sequence pos exps) = checkSequence e pos exps
 typeCheck e (ArrayCreation pos name exp1 exp2) = checkArray e pos name exp1 exp2
 typeCheck e (RecordCreation pos name fields) = checkRecord e pos name fields
 typeCheck e (LValExp pos lval@(Id name)) =
@@ -228,7 +226,7 @@ checkVariableAssignment :: TypeEnv ->
 checkVariableAssignment e pos var exp = do
       ti <- lookupValue e var pos
       texp <- verifyType e (snd ti) exp
-      return $ T.Assignment pos ti (T.Id var) texp
+      return $ T.Assignment pos (fst ti, Unit) (T.Id var) texp
 
 checkArrayAssignment :: TypeEnv ->
                         SourcePos ->
@@ -248,7 +246,10 @@ checkRecordAssignment :: TypeEnv ->
                          Expression ->
                          Either TypeError TExp
 checkRecordAssignment e pos rec field exp =
-      fst <$> checkRecordAccess e pos rec field >>= checkAssignment exp
+      case (fst <$> checkRecordAccess e pos rec field >>= checkAssignment exp) of
+        err@(Left _) -> err
+        Right texp -> Right (\tlval -> (T.Assignment pos (e, Unit) (T.RecordAccess tlval field) texp)) <*>
+                    checkLVal e rec
 
 checkAssignment :: Expression ->
                    TypeInfo ->
@@ -261,10 +262,12 @@ checkFunctionCall :: TypeEnv ->
                      [Expression] ->
                      Either TypeError TExp
 checkFunctionCall e pos fn args = do
-    retType <- lookupValue e fn pos >>=
+    let fnType = lookupValue e fn pos
+    retType <- fnType >>=
                verifyIsFunction >>=
                returnType
-    tExps <- verifyNumArgs retType >>=
+    tExps <- fnType >>=
+             verifyNumArgs >>=
              verifyArgTypes
     return $ T.FunctionCall pos retType fn tExps
   where verifyIsFunction res@(_, Function _ _) = Right res
@@ -333,7 +336,7 @@ checkLet :: TypeEnv ->
 checkLet e pos decs exps = do
   (e', tdecs) <- uniqTypeDecs decs pos >>
                   uniqFnDecs decs pos >>
-                  declareEnv (scope e) pos decs
+                  declareEnv (initializeLetScope decs $ scope e) pos decs
   texps <- checkListExps e' exps
   let (_, retTyp) = typeInfo $ last texps
   let e'' = unscope e'
@@ -485,7 +488,7 @@ declareFn e pos name fields retTyp body =
       let fnTyp = Function (fmap snd args) returnType
       let e' = (flip addVarScope $ args) $ addVarBinding name (e, fnTyp)
       tbody <- verifyType e' returnType body
-      return $ (e', T.FnDec name (fmap fst fields) tbody)
+      return $ (popVarScope e', T.FnDec name (fmap fst fields) tbody)
     where lookupReturnType e pos (Just retTyp) = lookupType e retTyp pos
           lookupReturnType e _ Nothing = Right (e, Unit)
 
@@ -524,6 +527,12 @@ initializeLetScope ((FnDec name args typ _):ds) e =
                                                                  (vEnv e)
                                          , sym = tbl
                                          })
+
+checkSequence :: TypeEnv -> SourcePos -> [Expression] -> Either TypeError TExp
+checkSequence e pos exps = (sequence $ fmap (typeCheck e) exps) >>= buildSeqType
+  where buildSeqType :: [TExp] -> Either TypeError TExp
+        buildSeqType [] = return $ T.Sequence pos (e, Unit) []
+        buildSeqType texps = return $ T.Sequence pos (typeInfo . last $ texps) texps
 
 verifyType :: TypeEnv
               -> ProgramType
