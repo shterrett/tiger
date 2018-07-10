@@ -29,7 +29,6 @@ expressionParser =
     try ((\sourcePos (ifExp, thenExp, elseExp) -> IfThenElse sourcePos ifExp thenExp elseExp) <$> getPosition <*> ifThenElseParser)
     <|> try ((uncurry <$> (IfThen <$> getPosition)) <*> ifThenParser)
     <|> try ((\sourcePos (t, e1, e2) -> ArrayCreation sourcePos t e1 e2) <$> getPosition <*> arrayCreateParser)
-    <|> try (DecExp <$> getPosition <*> declarationParser)
     <|> try (Sequence <$> getPosition <*> (between lparen rparen $ sequenceParser))
     <|> try (Grouped <$> getPosition <*> groupParser)
     <|> try ((uncurry <$> (Let <$> getPosition)) <*> letParser)

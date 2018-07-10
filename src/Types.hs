@@ -22,7 +22,6 @@ data LValue =
 
 data TExp =
     LValExp SourcePos TypeInfo LValue
-    | DecExp SourcePos TypeInfo Declaration
     | ValuelessExpression SourcePos TypeInfo TExp
     | Nil SourcePos TypeInfo
     | Sequence SourcePos TypeInfo [TExp]
@@ -116,7 +115,6 @@ instance Show Declarable where
 
 position :: TExp -> SourcePos
 position (LValExp pos _ _) = pos
-position (DecExp pos _ _) = pos
 position (ValuelessExpression pos _ _) = pos
 position (Nil pos _) = pos
 position (Sequence pos _ _) = pos
@@ -139,7 +137,6 @@ position (Grouped pos _ _) = pos
 
 typeInfo :: TExp -> TypeInfo
 typeInfo (LValExp _ ti _) = ti
-typeInfo (DecExp _ ti _) = ti
 typeInfo (ValuelessExpression _ ti _) = ti
 typeInfo (Nil _ ti) = ti
 typeInfo (Sequence _ ti _) = ti
